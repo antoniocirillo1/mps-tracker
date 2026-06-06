@@ -59,7 +59,6 @@ export default function TransactionsDashboard() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(loadTransactions, 0);
-
     const intervalId = window.setInterval(loadTransactions, 5000);
 
     return () => {
@@ -115,7 +114,10 @@ export default function TransactionsDashboard() {
 
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric label="Transazioni" value={transactions.length} />
-            <Metric label="Totale speso" value={currencyFormatter.format(totalAmount)} />
+            <Metric
+              label="Totale speso"
+              value={currencyFormatter.format(totalAmount)}
+            />
             <Metric
               label="SMS letti"
               value={`${parsedCount}/${transactions.length}`}
