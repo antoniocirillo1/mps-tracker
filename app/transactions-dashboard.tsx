@@ -37,8 +37,8 @@ export default function TransactionsDashboard() {
   const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(getSalaryPeriodStartDateKey);
+  const [dateTo, setDateTo] = useState(getTodayDateKey);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const loadTransactions = useCallback(async () => {
@@ -96,20 +96,19 @@ export default function TransactionsDashboard() {
   );
 
   return (
-    <main className="min-h-screen bg-[#f7f5f0] text-[#171512]">
-      <section className="border-b border-[#ded8cf] bg-[#fffdf8]">
+    <main className="min-h-screen bg-[#f3f6fb] text-[#17202f]">
+      <section className="border-b border-[#dbe3ee] bg-[#fbfcff]">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase text-[#8b1e1e]">
-                Banca MPS tracker
+              <p className="text-sm font-semibold uppercase text-[#0f8f8c]">
+                Tracking spese
               </p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">
-                Spese ricevute via SMS
+                Ma quanto spendi?
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[#655f57]">
-                Ogni chiamata dell&apos;automazione iPhone viene salvata qui in
-                memoria locale e divisa in importo, ricevente e data/ora.
+              <p className="mt-4 max-w-2xl text-base leading-7 text-[#657386]">
+                Ecco una lista delle tue spese recenti, aggiornata in tempo reale ogni volta che arriva.
               </p>
             </div>
 
@@ -117,7 +116,7 @@ export default function TransactionsDashboard() {
               <button
                 type="button"
                 onClick={() => setIsManualModalOpen(true)}
-                className="h-11 rounded-md bg-[#8b1e1e] px-4 text-xl font-semibold leading-none text-white transition hover:bg-[#6f1717] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
+                className="h-11 rounded-md bg-[#0f8f8c] px-4 text-xl font-semibold leading-none text-white shadow-sm transition hover:bg-[#0b7471] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
                 aria-label="Aggiungi pagamento manuale"
               >
                 +
@@ -125,7 +124,7 @@ export default function TransactionsDashboard() {
               <button
                 type="button"
                 onClick={loadTransactions}
-                className="h-11 w-fit rounded-md bg-[#171512] px-5 text-sm font-semibold text-white transition hover:bg-[#37322d] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
+                className="h-11 w-fit rounded-md bg-[#17202f] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2a3547] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
               >
                 Aggiorna
               </button>
@@ -147,17 +146,17 @@ export default function TransactionsDashboard() {
       </section>
 
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8 lg:px-10">
-        <div className="flex flex-col justify-between gap-2 border-b border-[#ded8cf] pb-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-2 border-b border-[#dbe3ee] pb-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-xl font-semibold">Lista movimenti</h2>
-            <p className="mt-1 text-sm text-[#655f57]">
+            <p className="mt-1 text-sm text-[#657386]">
               Aggiornamento automatico ogni 5 secondi.
             </p>
           </div>
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />
         </div>
 
-        <div className="grid gap-3 rounded-md border border-[#ded8cf] bg-[#fffdf8] p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
+        <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <DateField
             id="date-from"
             label="Da"
@@ -175,21 +174,11 @@ export default function TransactionsDashboard() {
           <button
             type="button"
             onClick={() => {
-              setDateFrom("1980-01-01");
-              setDateTo(getTodayDateKey());
-            }}
-            className="h-11 rounded-md bg-[#171512] px-4 text-sm font-semibold text-white transition hover:bg-[#37322d] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
-          >
-            SEMPRE
-          </button>
-          <button
-            type="button"
-            onClick={() => {
               setDateFrom("");
               setDateTo("");
             }}
             disabled={!hasActiveDateFilter}
-            className="h-11 rounded-md border border-[#c7b9a8] px-4 text-sm font-semibold text-[#171512] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c] hover:bg-[#eefafa] disabled:cursor-not-allowed disabled:opacity-45"
           >
             Pulisci
           </button>
@@ -203,11 +192,11 @@ export default function TransactionsDashboard() {
           <div className="grid gap-6">
             {transactionGroups.map((group) => (
               <section key={group.dayKey} className="grid gap-3">
-                <div className="sticky top-0 z-10 flex flex-col justify-between gap-2 border-y border-[#ded8cf] bg-[#f7f5f0]/95 py-3 backdrop-blur sm:flex-row sm:items-center">
-                  <h3 className="text-sm font-semibold uppercase text-[#655f57]">
+                <div className="sticky top-0 z-10 flex flex-col justify-between gap-2 border-y border-[#dbe3ee] bg-[#f3f6fb]/95 py-3 backdrop-blur sm:flex-row sm:items-center">
+                  <h3 className="text-sm font-semibold uppercase text-[#657386]">
                     {group.dayLabel}
                   </h3>
-                  <p className="text-sm font-semibold tabular-nums text-[#8b1e1e]">
+                  <p className="text-sm font-semibold tabular-nums text-[#c45a2b]">
                     Totale giorno {currencyFormatter.format(group.total)}
                   </p>
                 </div>
@@ -305,6 +294,19 @@ function getTodayDateKey() {
   return getLocalDayKey(new Date());
 }
 
+function getSalaryPeriodStartDateKey() {
+  const today = new Date();
+  const startDate = new Date(today);
+
+  startDate.setDate(20);
+
+  if (today.getDate() < 20) {
+    startDate.setMonth(startDate.getMonth() - 1);
+  }
+
+  return getLocalDayKey(startDate);
+}
+
 function getCurrentTimeKey() {
   const now = new Date();
   const hour = String(now.getHours()).padStart(2, "0");
@@ -315,8 +317,8 @@ function getCurrentTimeKey() {
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-[#ded8cf] bg-white px-4 py-4 shadow-sm">
-      <p className="text-sm font-medium text-[#655f57]">{label}</p>
+    <div className="rounded-md border border-[#dbe3ee] bg-white px-4 py-4 shadow-sm">
+      <p className="text-sm font-medium text-[#657386]">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
     </div>
   );
@@ -339,7 +341,7 @@ function DateField({
 }) {
   return (
     <label htmlFor={id} className="grid gap-2">
-      <span className="text-sm font-semibold text-[#655f57]">{label}</span>
+      <span className="text-sm font-semibold text-[#657386]">{label}</span>
       <input
         id={id}
         type="date"
@@ -347,7 +349,7 @@ function DateField({
         min={min}
         max={max}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+        className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
       />
     </label>
   );
@@ -406,22 +408,22 @@ function ManualTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end bg-black/35 px-4 py-5 sm:items-center sm:justify-center">
+    <div className="fixed inset-0 z-30 flex items-end bg-[#17202f]/45 px-4 py-5 sm:items-center sm:justify-center">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-md border border-[#ded8cf] bg-[#fffdf8] p-5 shadow-2xl"
+        className="w-full max-w-lg rounded-md border border-[#dbe3ee] bg-white p-5 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold">Nuovo pagamento</h2>
-            <p className="mt-1 text-sm text-[#655f57]">
+            <p className="mt-1 text-sm text-[#657386]">
               Inserisci un movimento manuale nella lista.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="h-9 w-9 rounded-md border border-[#c7b9a8] text-lg font-semibold transition hover:bg-white"
+            className="h-9 w-9 rounded-md border border-[#cad4e1] text-lg font-semibold transition hover:bg-[#f3f6fb]"
             aria-label="Chiudi"
           >
             x
@@ -445,19 +447,19 @@ function ManualTransactionModal({
               onChange={setDate}
             />
             <label htmlFor="manual-time" className="grid gap-2">
-              <span className="text-sm font-semibold text-[#655f57]">Ora</span>
+              <span className="text-sm font-semibold text-[#657386]">Ora</span>
               <input
                 id="manual-time"
                 type="time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+                className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
               />
             </label>
           </div>
 
           <label htmlFor="manual-amount" className="grid gap-2">
-            <span className="text-sm font-semibold text-[#655f57]">Importo</span>
+            <span className="text-sm font-semibold text-[#657386]">Importo</span>
             <input
               id="manual-amount"
               type="number"
@@ -467,12 +469,12 @@ function ManualTransactionModal({
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="34.77"
-              className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+              className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
             />
           </label>
 
           {error ? (
-            <p className="rounded-md bg-[#f7d7d7] px-3 py-2 text-sm font-semibold text-[#8b1e1e]">
+            <p className="rounded-md bg-[#ffe1d6] px-3 py-2 text-sm font-semibold text-[#a13d19]">
               {error}
             </p>
           ) : null}
@@ -482,14 +484,14 @@ function ManualTransactionModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-11 rounded-md border border-[#c7b9a8] px-4 text-sm font-semibold transition hover:bg-white"
+            className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold transition hover:bg-[#f3f6fb]"
           >
             Annulla
           </button>
           <button
             type="submit"
             disabled={isSaving}
-            className="h-11 rounded-md bg-[#8b1e1e] px-4 text-sm font-semibold text-white transition hover:bg-[#6f1717] disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 rounded-md bg-[#0f8f8c] px-4 text-sm font-semibold text-white transition hover:bg-[#0b7471] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSaving ? "Salvataggio..." : "Salva pagamento"}
           </button>
@@ -514,14 +516,14 @@ function TextField({
 }) {
   return (
     <label htmlFor={id} className="grid gap-2">
-      <span className="text-sm font-semibold text-[#655f57]">{label}</span>
+      <span className="text-sm font-semibold text-[#657386]">{label}</span>
       <input
         id={id}
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+        className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
       />
     </label>
   );
@@ -541,25 +543,25 @@ function TransactionRow({
     : "Data non letta";
 
   return (
-    <article className="grid gap-4 rounded-md border border-[#ded8cf] bg-white p-4 shadow-sm transition hover:border-[#c7b9a8] sm:grid-cols-[1fr_auto] sm:items-center">
+    <article className="grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm transition hover:border-[#9fcfce] hover:shadow-md sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="break-words text-lg font-semibold">
             {transaction.recipient}
           </h3>
           {transaction.status === "unparsed" ? (
-            <span className="rounded-sm bg-[#fff0d8] px-2 py-1 text-xs font-semibold text-[#8b4b00]">
+            <span className="rounded-sm bg-[#fff0cf] px-2 py-1 text-xs font-semibold text-[#8b5b00]">
               Da verificare
             </span>
           ) : null}
         </div>
-        <p className="mt-2 text-sm text-[#655f57]">{dateLabel}</p>
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7c756d]">
+        <p className="mt-2 text-sm text-[#657386]">{dateLabel}</p>
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7a8797]">
           {transaction.rawMessage}
         </p>
       </div>
 
-      <p className="text-left text-2xl font-semibold tabular-nums text-[#8b1e1e] sm:text-right">
+      <p className="text-left text-2xl font-semibold tabular-nums text-[#c45a2b] sm:text-right">
         {amountLabel}
       </p>
     </article>
@@ -568,9 +570,9 @@ function TransactionRow({
 
 function NoResultsState() {
   return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-[#c7b9a8] bg-[#fffdf8] px-6 text-center">
+    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-[#cad4e1] bg-white px-6 text-center">
       <p className="text-lg font-semibold">Nessun pagamento in questo intervallo</p>
-      <p className="mt-3 max-w-md text-sm leading-6 text-[#655f57]">
+      <p className="mt-3 max-w-md text-sm leading-6 text-[#657386]">
         Modifica le date o pulisci il filtro per tornare alla lista completa.
       </p>
     </div>
@@ -586,7 +588,7 @@ function StatusBadge({
 }) {
   if (loadState === "error") {
     return (
-      <span className="w-fit rounded-md bg-[#f7d7d7] px-3 py-2 text-sm font-semibold text-[#8b1e1e]">
+      <span className="w-fit rounded-md bg-[#ffe1d6] px-3 py-2 text-sm font-semibold text-[#a13d19]">
         Connessione API non riuscita
       </span>
     );
@@ -603,7 +605,7 @@ function StatusBadge({
         : "In attesa";
 
   return (
-    <span className="w-fit rounded-md bg-[#e7f2e4] px-3 py-2 text-sm font-semibold text-[#2d6734]">
+    <span className="w-fit rounded-md bg-[#dff4f3] px-3 py-2 text-sm font-semibold text-[#0b7471]">
       {label}
     </span>
   );
@@ -611,16 +613,16 @@ function StatusBadge({
 
 function EmptyState({ loadState }: { loadState: LoadState }) {
   return (
-    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-md border border-dashed border-[#c7b9a8] bg-[#fffdf8] px-6 text-center">
+    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-md border border-dashed border-[#cad4e1] bg-white px-6 text-center">
       <p className="text-lg font-semibold">
         {loadState === "loading"
           ? "Sto leggendo le transazioni..."
           : "Nessuna transazione ricevuta"}
       </p>
-      <p className="mt-3 max-w-md text-sm leading-6 text-[#655f57]">
+      <p className="mt-3 max-w-md text-sm leading-6 text-[#657386]">
         Invia dall&apos;automazione iPhone un POST a{" "}
-        <span className="font-mono text-[#171512]">/api/transactions</span> con{" "}
-        <span className="font-mono text-[#171512]">rawMessage</span>. Appena
+        <span className="font-mono text-[#17202f]">/api/transactions</span> con{" "}
+        <span className="font-mono text-[#17202f]">rawMessage</span>. Appena
         arriva, comparira in questa lista.
       </p>
     </div>
