@@ -16,7 +16,21 @@ const dateFormatter = new Intl.DateTimeFormat("it-IT", {
   minute: "2-digit",
 });
 
+const dayFormatter = new Intl.DateTimeFormat("it-IT", {
+  weekday: "long",
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+});
+
 type LoadState = "loading" | "ready" | "error";
+
+type TransactionGroup = {
+  dayKey: string;
+  dayLabel: string;
+  total: number;
+  transactions: ParsedTransaction[];
+};
 
 export default function TransactionsDashboard() {
   const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
@@ -66,6 +80,11 @@ export default function TransactionsDashboard() {
   const parsedCount = transactions.filter(
     (transaction) => transaction.status === "parsed"
   ).length;
+
+  const transactionGroups = useMemo(
+    () => groupTransactionsByDay(transactions),
+    [transactions]
+  );
 
   return (
     <main className="min-h-screen bg-[#f7f5f0] text-[#171512]">
@@ -119,18 +138,72 @@ export default function TransactionsDashboard() {
         {transactions.length === 0 ? (
           <EmptyState loadState={loadState} />
         ) : (
-          <div className="grid gap-3">
-            {transactions.map((transaction) => (
-              <TransactionRow
-                key={transaction.id}
-                transaction={transaction}
-              />
+          <div className="grid gap-6">
+            {transactionGroups.map((group) => (
+              <section key={group.dayKey} className="grid gap-3">
+                <div className="sticky top-0 z-10 flex flex-col justify-between gap-2 border-y border-[#ded8cf] bg-[#f7f5f0]/95 py-3 backdrop-blur sm:flex-row sm:items-center">
+                  <h3 className="text-sm font-semibold uppercase text-[#655f57]">
+                    {group.dayLabel}
+                  </h3>
+                  <p className="text-sm font-semibold tabular-nums text-[#8b1e1e]">
+                    Totale giorno {currencyFormatter.format(group.total)}
+                  </p>
+                </div>
+
+                {group.transactions.map((transaction) => (
+                  <TransactionRow
+                    key={transaction.id}
+                    transaction={transaction}
+                  />
+                ))}
+              </section>
             ))}
           </div>
         )}
       </section>
     </main>
   );
+}
+
+function groupTransactionsByDay(transactions: ParsedTransaction[]) {
+  const groups = new Map<string, TransactionGroup>();
+  const sortedTransactions = [...transactions].sort((first, second) => {
+    return getTransactionTime(second) - getTransactionTime(first);
+  });
+
+  for (const transaction of sortedTransactions) {
+    const dateValue = transaction.occurredAt ?? transaction.createdAt;
+    const date = new Date(dateValue);
+    const dayKey = getLocalDayKey(date);
+    const existingGroup = groups.get(dayKey);
+
+    if (existingGroup) {
+      existingGroup.total += transaction.amount ?? 0;
+      existingGroup.transactions.push(transaction);
+      continue;
+    }
+
+    groups.set(dayKey, {
+      dayKey,
+      dayLabel: dayFormatter.format(date),
+      total: transaction.amount ?? 0,
+      transactions: [transaction],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
+function getTransactionTime(transaction: ParsedTransaction) {
+  return new Date(transaction.occurredAt ?? transaction.createdAt).getTime();
+}
+
+function getLocalDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {

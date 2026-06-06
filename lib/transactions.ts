@@ -75,15 +75,28 @@ function parseOccurredAt(message: string) {
 
   const [, day, month, hour, minute] = match;
   const now = new Date();
+  const year = now.getFullYear();
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
   const occurredAt = new Date(
-    now.getFullYear(),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute)
+    year,
+    monthNumber - 1,
+    dayNumber,
+    hourNumber,
+    minuteNumber
   );
 
-  return Number.isNaN(occurredAt.getTime()) ? null : occurredAt.toISOString();
+  if (Number.isNaN(occurredAt.getTime())) {
+    return null;
+  }
+
+  return `${year}-${padDatePart(monthNumber)}-${padDatePart(dayNumber)}T${padDatePart(hourNumber)}:${padDatePart(minuteNumber)}:00`;
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, "0");
 }
 
 function parseRecipient(message: string) {
