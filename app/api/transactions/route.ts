@@ -1,30 +1,15 @@
 import { NextResponse } from "next/server";
-
-type TransactionPayload = {
-  rawMessage?: string;
-  [key: string]: unknown;
-};
-
-type StoredTransaction = TransactionPayload & {
-  createdAt: string;
-};
-
-const memory: StoredTransaction[] = [];
+import { addTransaction, getTransactions } from "@/lib/transactions";
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as TransactionPayload;
-  const rawMessage = String(body.rawMessage ?? "");
+  const body = await req.json();
+  const transaction = addTransaction(body);
 
-  memory.push({
-    ...body,
-    createdAt: new Date().toISOString(),
-  });
+  console.log("NEW TRANSACTION:", transaction.rawMessage);
 
-  console.log("NEW TRANSACTION:", rawMessage);
-
-  return NextResponse.json({ ok: true, rawMessage });
+  return NextResponse.json({ ok: true, transaction });
 }
 
 export async function GET() {
-  return NextResponse.json(memory);
+  return NextResponse.json(getTransactions());
 }
