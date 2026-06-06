@@ -118,7 +118,7 @@ export default function TransactionsDashboard() {
       loadSettings().catch(() => setLoadState("error"));
       loadPlannedExpenses().catch(() => setLoadState("error"));
     }, 0);
-    const intervalId = window.setInterval(loadTransactions, 5000);
+    const intervalId = window.setInterval(loadTransactions, 3600000);
 
     return () => {
       window.clearTimeout(timeoutId);
