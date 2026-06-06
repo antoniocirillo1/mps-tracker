@@ -1,3 +1,5 @@
+import { supabaseRequest } from "@/lib/supabase";
+
 export type ParsedTransaction = {
   id: string;
   rawMessage: string;
@@ -73,6 +75,45 @@ export async function getTransactions() {
   );
 
   return transactions.map(fromSupabaseTransaction);
+}
+
+export async function updateTransaction(
+  id: string,
+  payload: Pick<TransactionPayload, "amount" | "recipient" | "occurredAt">
+) {
+  const recipient = String(payload.recipient ?? "").trim();
+  const amount = normalizeAmount(payload.amount);
+  const occurredAt = String(payload.occurredAt ?? "").trim();
+
+  if (!recipient || amount === null || !occurredAt) {
+    throw new Error("Transaction update is incomplete");
+  }
+
+  const [transaction] = await supabaseRequest<SupabaseTransaction[]>(
+    `/transactions?id=eq.${encodeURIComponent(id)}&select=*`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        amount,
+        recipient,
+        occurred_at: occurredAt,
+      }),
+    }
+  );
+
+  return fromSupabaseTransaction(transaction);
+}
+
+export async function deleteTransaction(id: string) {
+  await supabaseRequest<null>(
+    `/transactions?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Prefer: "return=minimal",
+      },
+    }
+  );
 }
 
 function parseMpsMessage(rawMessage: string): ParsedTransaction {
@@ -156,7 +197,7 @@ function normalizeAmount(value: unknown) {
 }
 
 function parseEmailAmount(message: string) {
-  const match = message.match(/Importo\s+([\d.,]+)\s*€/i);
+  const match = message.match(/Importo\s+([\d.,]+)\s*(?:€|EUR)?/i);
 
   return match ? normalizeAmount(match[1]) : null;
 }
@@ -258,33 +299,6 @@ function fromSupabaseTransaction(
     source: transaction.source,
     status: transaction.amount === null ? "unparsed" : "parsed",
   };
-}
-
-async function supabaseRequest<T>(path: string, init: RequestInit = {}) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new Error("Missing Supabase environment variables");
-  }
-
-  const response = await fetch(`${url}/rest/v1${path}`, {
-    ...init,
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...init.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Supabase request failed: ${message}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 function padDatePart(value: number) {

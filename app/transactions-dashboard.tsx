@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
+import type { TrackerSettings } from "@/lib/settings";
 import type { ParsedTransaction } from "@/lib/transactions";
 
 const currencyFormatter = new Intl.NumberFormat("it-IT", {
@@ -33,13 +34,27 @@ type TransactionGroup = {
   transactions: ParsedTransaction[];
 };
 
+type Forecast = {
+  periodSpent: number;
+  dailyAverage: number;
+  projectedThirtyDays: number;
+  availableBudget: number;
+  delta: number;
+  elapsedDays: number;
+};
+
 export default function TransactionsDashboard() {
   const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
+  const [settings, setSettings] = useState<TrackerSettings | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [dateFrom, setDateFrom] = useState(getSalaryPeriodStartDateKey);
   const [dateTo, setDateTo] = useState(getTodayDateKey);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<ParsedTransaction | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -61,15 +76,34 @@ export default function TransactionsDashboard() {
     }
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    const response = await fetch("/api/settings", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Settings request failed");
+    }
+
+    const nextSettings = (await response.json()) as TrackerSettings;
+
+    setSettings(nextSettings);
+    setDateFrom(nextSettings.salaryAnchorDate);
+    setDateTo(getTodayDateKey());
+  }, []);
+
   useEffect(() => {
-    const timeoutId = window.setTimeout(loadTransactions, 0);
+    const timeoutId = window.setTimeout(() => {
+      loadTransactions();
+      loadSettings().catch(() => setLoadState("error"));
+    }, 0);
     const intervalId = window.setInterval(loadTransactions, 5000);
 
     return () => {
       window.clearTimeout(timeoutId);
       window.clearInterval(intervalId);
     };
-  }, [loadTransactions]);
+  }, [loadSettings, loadTransactions]);
 
   const filteredTransactions = useMemo(
     () => filterTransactionsByDateRange(transactions, dateFrom, dateTo),
@@ -95,13 +129,51 @@ export default function TransactionsDashboard() {
     [filteredTransactions]
   );
 
+  const forecast = useMemo(
+    () => (settings ? calculateForecast(transactions, settings) : null),
+    [settings, transactions]
+  );
+
+  async function handleDeleteTransaction(transaction: ParsedTransaction) {
+    const confirmed = window.confirm(
+      `Eliminare il pagamento "${transaction.recipient}"?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`/api/transactions/${transaction.id}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      setOpenActionId(null);
+      await loadTransactions();
+    }
+  }
+
+  async function handleSettingsSaved(nextSettings: TrackerSettings) {
+    setSettings(nextSettings);
+    setDateFrom(nextSettings.salaryAnchorDate);
+    setDateTo(getTodayDateKey());
+    await loadTransactions();
+  }
+
   return (
     <main className="min-h-screen bg-[#f3f6fb] text-[#17202f]">
       <section className="border-b border-[#dbe3ee] bg-[#fbfcff]">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase text-[#0f8f8c]">
+              <button
+                type="button"
+                onClick={() => setIsSettingsModalOpen(true)}
+                className="rounded-md border border-[#cad4e1] bg-white px-3 py-2 text-sm font-semibold text-[#17202f] shadow-sm transition hover:border-[#0f8f8c] hover:bg-[#eefafa]"
+              >
+                Imposta stipendio
+              </button>
+              <p className="mt-5 text-sm font-semibold uppercase text-[#0f8f8c]">
                 Tracking spese
               </p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">
@@ -131,7 +203,7 @@ export default function TransactionsDashboard() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Transazioni" value={filteredTransactions.length} />
             <Metric
               label="Totale speso"
@@ -141,7 +213,10 @@ export default function TransactionsDashboard() {
               label="Operazioni lette"
               value={`${parsedCount}/${filteredTransactions.length}`}
             />
+            <ForecastMetric forecast={forecast} />
           </div>
+
+          {forecast ? <ForecastPanel forecast={forecast} /> : null}
         </div>
       </section>
 
@@ -205,6 +280,17 @@ export default function TransactionsDashboard() {
                   <TransactionRow
                     key={transaction.id}
                     transaction={transaction}
+                    isMenuOpen={openActionId === transaction.id}
+                    onToggleMenu={() =>
+                      setOpenActionId(
+                        openActionId === transaction.id ? null : transaction.id
+                      )
+                    }
+                    onEdit={() => {
+                      setEditingTransaction(transaction);
+                      setOpenActionId(null);
+                    }}
+                    onDelete={() => handleDeleteTransaction(transaction)}
                   />
                 ))}
               </section>
@@ -217,6 +303,28 @@ export default function TransactionsDashboard() {
         <ManualTransactionModal
           onClose={() => setIsManualModalOpen(false)}
           onSaved={loadTransactions}
+        />
+      ) : null}
+
+      {editingTransaction ? (
+        <EditTransactionModal
+          transaction={editingTransaction}
+          onClose={() => setEditingTransaction(null)}
+          onSaved={async () => {
+            setEditingTransaction(null);
+            await loadTransactions();
+          }}
+        />
+      ) : null}
+
+      {isSettingsModalOpen ? (
+        <SettingsModal
+          settings={settings}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onSaved={async (nextSettings) => {
+            setIsSettingsModalOpen(false);
+            await handleSettingsSaved(nextSettings);
+          }}
         />
       ) : null}
     </main>
@@ -272,6 +380,46 @@ function filterTransactionsByDateRange(
   });
 }
 
+function calculateForecast(
+  transactions: ParsedTransaction[],
+  settings: TrackerSettings
+): Forecast {
+  const today = getTodayDateKey();
+  const salaryTransactions = filterTransactionsByDateRange(
+    transactions,
+    settings.salaryAnchorDate,
+    today
+  );
+  const periodSpent = salaryTransactions.reduce(
+    (total, transaction) => total + (transaction.amount ?? 0),
+    0
+  );
+  const elapsedDays = Math.max(
+    1,
+    daysBetween(settings.salaryAnchorDate, today) + 1
+  );
+  const dailyAverage = periodSpent / elapsedDays;
+  const projectedThirtyDays = dailyAverage * 30;
+  const availableBudget = settings.monthlyIncome - settings.savingsGoal;
+
+  return {
+    periodSpent,
+    dailyAverage,
+    projectedThirtyDays,
+    availableBudget,
+    delta: availableBudget - projectedThirtyDays,
+    elapsedDays,
+  };
+}
+
+function daysBetween(start: string, end: string) {
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  const dayInMs = 24 * 60 * 60 * 1000;
+
+  return Math.floor((endDate.getTime() - startDate.getTime()) / dayInMs);
+}
+
 function getTransactionDayKey(transaction: ParsedTransaction) {
   return getLocalDayKey(
     new Date(transaction.occurredAt ?? transaction.createdAt)
@@ -315,11 +463,62 @@ function getCurrentTimeKey() {
   return `${hour}:${minute}`;
 }
 
+function splitDateTime(value: string | null) {
+  const date = value ? new Date(value) : new Date();
+
+  return {
+    date: getLocalDayKey(date),
+    time: `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes()
+    ).padStart(2, "0")}`,
+  };
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-[#dbe3ee] bg-white px-4 py-4 shadow-sm">
       <p className="text-sm font-medium text-[#657386]">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function ForecastMetric({ forecast }: { forecast: Forecast | null }) {
+  const label = forecast && forecast.delta >= 0 ? "Sei sotto" : "Sei sopra";
+  const value = forecast
+    ? currencyFormatter.format(Math.abs(forecast.delta))
+    : "In calcolo";
+
+  return <Metric label={label} value={value} />;
+}
+
+function ForecastPanel({ forecast }: { forecast: Forecast }) {
+  const isUnderBudget = forecast.delta >= 0;
+
+  return (
+    <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-3">
+      <div>
+        <p className="text-sm font-medium text-[#657386]">Media giornaliera</p>
+        <p className="mt-2 text-xl font-semibold">
+          {currencyFormatter.format(forecast.dailyAverage)}
+        </p>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[#657386]">Previsione 30 giorni</p>
+        <p className="mt-2 text-xl font-semibold">
+          {currencyFormatter.format(forecast.projectedThirtyDays)}
+        </p>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[#657386]">Obiettivo risparmio</p>
+        <p
+          className={`mt-2 text-xl font-semibold ${
+            isUnderBudget ? "text-[#0b7471]" : "text-[#c45a2b]"
+          }`}
+        >
+          {isUnderBudget ? "In linea" : "Da rallentare"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -408,17 +607,126 @@ function ManualTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end bg-[#17202f]/45 px-4 py-5 sm:items-center sm:justify-center">
-      <form
+    <TransactionModalShell
+      title="Nuovo pagamento"
+      description="Inserisci un movimento manuale nella lista."
+      onClose={onClose}
+    >
+      <TransactionForm
+        amount={amount}
+        date={date}
+        error={error}
+        isSaving={isSaving}
+        recipient={recipient}
+        submitLabel="Salva pagamento"
+        time={time}
+        onAmountChange={setAmount}
+        onCancel={onClose}
+        onDateChange={setDate}
+        onRecipientChange={setRecipient}
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-md border border-[#dbe3ee] bg-white p-5 shadow-2xl"
-      >
+        onTimeChange={setTime}
+      />
+    </TransactionModalShell>
+  );
+}
+
+function EditTransactionModal({
+  transaction,
+  onClose,
+  onSaved,
+}: {
+  transaction: ParsedTransaction;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const initialDateTime = splitDateTime(transaction.occurredAt);
+  const [recipient, setRecipient] = useState(transaction.recipient);
+  const [date, setDate] = useState(initialDateTime.date);
+  const [time, setTime] = useState(initialDateTime.time);
+  const [amount, setAmount] = useState(String(transaction.amount ?? ""));
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (!recipient.trim() || !date || !time || !amount) {
+      setError("Compila destinatario, data, ora e importo.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`/api/transactions/${transaction.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient,
+          amount,
+          occurredAt: `${date}T${time}:00`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Save failed");
+      }
+
+      await onSaved();
+    } catch {
+      setError("Non sono riuscito a modificare il pagamento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <TransactionModalShell
+      title="Modifica pagamento"
+      description="Aggiorna i dati salvati su Supabase."
+      onClose={onClose}
+    >
+      <TransactionForm
+        amount={amount}
+        date={date}
+        error={error}
+        isSaving={isSaving}
+        recipient={recipient}
+        submitLabel="Salva modifiche"
+        time={time}
+        onAmountChange={setAmount}
+        onCancel={onClose}
+        onDateChange={setDate}
+        onRecipientChange={setRecipient}
+        onSubmit={handleSubmit}
+        onTimeChange={setTime}
+      />
+    </TransactionModalShell>
+  );
+}
+
+function TransactionModalShell({
+  title,
+  description,
+  children,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-[#17202f]/45 px-4 py-5 sm:items-center sm:justify-center">
+      <div className="w-full max-w-lg rounded-md border border-[#dbe3ee] bg-white p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold">Nuovo pagamento</h2>
-            <p className="mt-1 text-sm text-[#657386]">
-              Inserisci un movimento manuale nella lista.
-            </p>
+            <h2 className="text-xl font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-[#657386]">{description}</p>
           </div>
           <button
             type="button"
@@ -430,45 +738,207 @@ function ManualTransactionModal({
           </button>
         </div>
 
-        <div className="mt-5 grid gap-4">
-          <TextField
-            id="manual-recipient"
-            label="Destinatario"
-            value={recipient}
-            onChange={setRecipient}
-            placeholder="Es. FIRMOO"
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TransactionForm({
+  amount,
+  date,
+  error,
+  isSaving,
+  recipient,
+  submitLabel,
+  time,
+  onAmountChange,
+  onCancel,
+  onDateChange,
+  onRecipientChange,
+  onSubmit,
+  onTimeChange,
+}: {
+  amount: string;
+  date: string;
+  error: string;
+  isSaving: boolean;
+  recipient: string;
+  submitLabel: string;
+  time: string;
+  onAmountChange: (value: string) => void;
+  onCancel: () => void;
+  onDateChange: (value: string) => void;
+  onRecipientChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onTimeChange: (value: string) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="mt-5 grid gap-4">
+        <TextField
+          id="transaction-recipient"
+          label="Destinatario"
+          value={recipient}
+          onChange={onRecipientChange}
+          placeholder="Es. FIRMOO"
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DateField
+            id="transaction-date"
+            label="Data"
+            value={date}
+            onChange={onDateChange}
           />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <DateField
-              id="manual-date"
-              label="Data"
-              value={date}
-              onChange={setDate}
-            />
-            <label htmlFor="manual-time" className="grid gap-2">
-              <span className="text-sm font-semibold text-[#657386]">Ora</span>
-              <input
-                id="manual-time"
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
-              />
-            </label>
-          </div>
-
-          <label htmlFor="manual-amount" className="grid gap-2">
-            <span className="text-sm font-semibold text-[#657386]">Importo</span>
+          <label htmlFor="transaction-time" className="grid gap-2">
+            <span className="text-sm font-semibold text-[#657386]">Ora</span>
             <input
-              id="manual-amount"
+              id="transaction-time"
+              type="time"
+              value={time}
+              onChange={(event) => onTimeChange(event.target.value)}
+              className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+            />
+          </label>
+        </div>
+
+        <label htmlFor="transaction-amount" className="grid gap-2">
+          <span className="text-sm font-semibold text-[#657386]">Importo</span>
+          <input
+            id="transaction-amount"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={(event) => onAmountChange(event.target.value)}
+            placeholder="34.77"
+            className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+          />
+        </label>
+
+        {error ? (
+          <p className="rounded-md bg-[#ffe1d6] px-3 py-2 text-sm font-semibold text-[#a13d19]">
+            {error}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold transition hover:bg-[#f3f6fb]"
+        >
+          Annulla
+        </button>
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="h-11 rounded-md bg-[#0f8f8c] px-4 text-sm font-semibold text-white transition hover:bg-[#0b7471] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isSaving ? "Salvataggio..." : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function SettingsModal({
+  settings,
+  onClose,
+  onSaved,
+}: {
+  settings: TrackerSettings | null;
+  onClose: () => void;
+  onSaved: (settings: TrackerSettings) => Promise<void>;
+}) {
+  const [salaryAnchorDate, setSalaryAnchorDate] = useState(
+    settings?.salaryAnchorDate ?? getSalaryPeriodStartDateKey()
+  );
+  const [monthlyIncome, setMonthlyIncome] = useState(
+    String(settings?.monthlyIncome ?? 1930)
+  );
+  const [savingsGoal, setSavingsGoal] = useState(
+    String(settings?.savingsGoal ?? 300)
+  );
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          salaryAnchorDate,
+          monthlyIncome,
+          savingsGoal,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Save failed");
+      }
+
+      const data = (await response.json()) as {
+        settings: TrackerSettings;
+      };
+
+      await onSaved(data.settings);
+    } catch {
+      setError("Non sono riuscito a salvare le impostazioni.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <TransactionModalShell
+      title="Impostazioni stipendio"
+      description="Scegli inizio mese fiscale, stipendio e obiettivo risparmio."
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="mt-5 grid gap-4">
+          <DateField
+            id="salary-date"
+            label="Data arrivo stipendio"
+            value={salaryAnchorDate}
+            onChange={setSalaryAnchorDate}
+          />
+          <label htmlFor="monthly-income" className="grid gap-2">
+            <span className="text-sm font-semibold text-[#657386]">
+              Stipendio mensile
+            </span>
+            <input
+              id="monthly-income"
               type="number"
-              inputMode="decimal"
               min="0"
               step="0.01"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              placeholder="34.77"
+              value={monthlyIncome}
+              onChange={(event) => setMonthlyIncome(event.target.value)}
+              className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+            />
+          </label>
+          <label htmlFor="savings-goal" className="grid gap-2">
+            <span className="text-sm font-semibold text-[#657386]">
+              Risparmio desiderato
+            </span>
+            <input
+              id="savings-goal"
+              type="number"
+              min="0"
+              step="0.01"
+              value={savingsGoal}
+              onChange={(event) => setSavingsGoal(event.target.value)}
               className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
             />
           </label>
@@ -493,11 +963,11 @@ function ManualTransactionModal({
             disabled={isSaving}
             className="h-11 rounded-md bg-[#0f8f8c] px-4 text-sm font-semibold text-white transition hover:bg-[#0b7471] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSaving ? "Salvataggio..." : "Salva pagamento"}
+            {isSaving ? "Salvataggio..." : "Salva impostazioni"}
           </button>
         </div>
       </form>
-    </div>
+    </TransactionModalShell>
   );
 }
 
@@ -531,8 +1001,16 @@ function TextField({
 
 function TransactionRow({
   transaction,
+  isMenuOpen,
+  onDelete,
+  onEdit,
+  onToggleMenu,
 }: {
   transaction: ParsedTransaction;
+  isMenuOpen: boolean;
+  onDelete: () => void;
+  onEdit: () => void;
+  onToggleMenu: () => void;
 }) {
   const amountLabel =
     transaction.amount === null
@@ -543,7 +1021,7 @@ function TransactionRow({
     : "Data non letta";
 
   return (
-    <article className="grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm transition hover:border-[#9fcfce] hover:shadow-md sm:grid-cols-[1fr_auto] sm:items-center">
+    <article className="relative grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 pr-12 shadow-sm transition hover:border-[#9fcfce] hover:shadow-md sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="break-words text-lg font-semibold">
@@ -565,6 +1043,35 @@ function TransactionRow({
       <p className="text-left text-2xl font-semibold tabular-nums text-[#c45a2b] sm:text-right">
         {amountLabel}
       </p>
+
+      <div className="absolute right-3 top-3">
+        <button
+          type="button"
+          onClick={onToggleMenu}
+          className="h-9 w-9 rounded-md text-lg font-semibold text-[#657386] transition hover:bg-[#f3f6fb]"
+          aria-label="Azioni transazione"
+        >
+          ...
+        </button>
+        {isMenuOpen ? (
+          <div className="absolute right-0 z-20 mt-1 grid min-w-32 overflow-hidden rounded-md border border-[#dbe3ee] bg-white text-sm font-semibold shadow-lg">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="px-4 py-2 text-left transition hover:bg-[#eefafa]"
+            >
+              Modifica
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="px-4 py-2 text-left text-[#a13d19] transition hover:bg-[#ffe1d6]"
+            >
+              Elimina
+            </button>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }
