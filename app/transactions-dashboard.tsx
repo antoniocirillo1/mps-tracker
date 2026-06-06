@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import type { PlannedExpense } from "@/lib/planned-expenses";
 import type { TrackerSettings } from "@/lib/settings";
 import type { ParsedTransaction } from "@/lib/transactions";
 
@@ -38,6 +39,8 @@ type Forecast = {
   periodSpent: number;
   dailyAverage: number;
   projectedThirtyDays: number;
+  plannedUpcoming: number;
+  projectedWithPlanned: number;
   availableBudget: number;
   delta: number;
   elapsedDays: number;
@@ -45,12 +48,15 @@ type Forecast = {
 
 export default function TransactionsDashboard() {
   const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
+  const [plannedExpenses, setPlannedExpenses] = useState<PlannedExpense[]>([]);
   const [settings, setSettings] = useState<TrackerSettings | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [dateFrom, setDateFrom] = useState(getSalaryPeriodStartDateKey);
   const [dateTo, setDateTo] = useState(getTodayDateKey);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isPlannedModalOpen, setIsPlannedModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<ParsedTransaction | null>(null);
@@ -92,10 +98,25 @@ export default function TransactionsDashboard() {
     setDateTo(getTodayDateKey());
   }, []);
 
+  const loadPlannedExpenses = useCallback(async () => {
+    const response = await fetch("/api/planned-expenses", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Planned expenses request failed");
+    }
+
+    const nextPlannedExpenses = (await response.json()) as PlannedExpense[];
+
+    setPlannedExpenses(nextPlannedExpenses);
+  }, []);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       loadTransactions();
       loadSettings().catch(() => setLoadState("error"));
+      loadPlannedExpenses().catch(() => setLoadState("error"));
     }, 0);
     const intervalId = window.setInterval(loadTransactions, 5000);
 
@@ -103,7 +124,7 @@ export default function TransactionsDashboard() {
       window.clearTimeout(timeoutId);
       window.clearInterval(intervalId);
     };
-  }, [loadSettings, loadTransactions]);
+  }, [loadPlannedExpenses, loadSettings, loadTransactions]);
 
   const filteredTransactions = useMemo(
     () => filterTransactionsByDateRange(transactions, dateFrom, dateTo),
@@ -130,8 +151,11 @@ export default function TransactionsDashboard() {
   );
 
   const forecast = useMemo(
-    () => (settings ? calculateForecast(transactions, settings) : null),
-    [settings, transactions]
+    () =>
+      settings
+        ? calculateForecast(transactions, settings, plannedExpenses)
+        : null,
+    [plannedExpenses, settings, transactions]
   );
 
   async function handleDeleteTransaction(transaction: ParsedTransaction) {
@@ -185,14 +209,40 @@ export default function TransactionsDashboard() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setIsManualModalOpen(true)}
-                className="h-11 rounded-md bg-[#0f8f8c] px-4 text-xl font-semibold leading-none text-white shadow-sm transition hover:bg-[#0b7471] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
-                aria-label="Aggiungi pagamento manuale"
-              >
-                +
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMenuOpen((isOpen) => !isOpen)}
+                  className="h-11 rounded-md bg-[#0f8f8c] px-4 text-xl font-semibold leading-none text-white shadow-sm transition hover:bg-[#0b7471] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
+                  aria-label="Aggiungi pagamento"
+                >
+                  +
+                </button>
+                {isAddMenuOpen ? (
+                  <div className="absolute right-0 z-20 mt-2 grid min-w-56 overflow-hidden rounded-md border border-[#dbe3ee] bg-white text-sm font-semibold shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualModalOpen(true);
+                        setIsAddMenuOpen(false);
+                      }}
+                      className="px-4 py-3 text-left transition hover:bg-[#eefafa]"
+                    >
+                      Nuovo pagamento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPlannedModalOpen(true);
+                        setIsAddMenuOpen(false);
+                      }}
+                      className="px-4 py-3 text-left transition hover:bg-[#eefafa]"
+                    >
+                      Nuovo pagamento periodico
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={loadTransactions}
@@ -306,6 +356,14 @@ export default function TransactionsDashboard() {
         />
       ) : null}
 
+      {isPlannedModalOpen ? (
+        <PlannedExpenseModal
+          plannedExpenses={plannedExpenses}
+          onClose={() => setIsPlannedModalOpen(false)}
+          onSaved={loadPlannedExpenses}
+        />
+      ) : null}
+
       {editingTransaction ? (
         <EditTransactionModal
           transaction={editingTransaction}
@@ -382,7 +440,8 @@ function filterTransactionsByDateRange(
 
 function calculateForecast(
   transactions: ParsedTransaction[],
-  settings: TrackerSettings
+  settings: TrackerSettings,
+  plannedExpenses: PlannedExpense[]
 ): Forecast {
   const today = getTodayDateKey();
   const salaryTransactions = filterTransactionsByDateRange(
@@ -400,16 +459,45 @@ function calculateForecast(
   );
   const dailyAverage = periodSpent / elapsedDays;
   const projectedThirtyDays = dailyAverage * 30;
+  const plannedUpcoming = getVisiblePlannedExpenses(plannedExpenses).reduce(
+    (total, expense) => total + expense.amount,
+    0
+  );
+  const projectedWithPlanned = projectedThirtyDays + plannedUpcoming;
   const availableBudget = settings.monthlyIncome - settings.savingsGoal;
 
   return {
     periodSpent,
     dailyAverage,
     projectedThirtyDays,
+    plannedUpcoming,
+    projectedWithPlanned,
     availableBudget,
-    delta: availableBudget - projectedThirtyDays,
+    delta: availableBudget - projectedWithPlanned,
     elapsedDays,
   };
+}
+
+function getVisiblePlannedExpenses(plannedExpenses: PlannedExpense[]) {
+  const today = new Date(`${getTodayDateKey()}T00:00:00`);
+
+  return plannedExpenses.filter((expense) => {
+    const dueDate = getMonthlyDueDate(today, expense.dayOfMonth);
+    const startsAt = new Date(dueDate);
+
+    startsAt.setDate(startsAt.getDate() - 5);
+
+    return today >= startsAt && today <= dueDate;
+  });
+}
+
+function getMonthlyDueDate(today: Date, dayOfMonth: number) {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const safeDay = Math.min(dayOfMonth, lastDay);
+
+  return new Date(year, month, safeDay);
 }
 
 function daysBetween(start: string, end: string) {
@@ -496,7 +584,7 @@ function ForecastPanel({ forecast }: { forecast: Forecast }) {
   const isUnderBudget = forecast.delta >= 0;
 
   return (
-    <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-3">
+    <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-4">
       <div>
         <p className="text-sm font-medium text-[#657386]">Media giornaliera</p>
         <p className="mt-2 text-xl font-semibold">
@@ -507,6 +595,12 @@ function ForecastPanel({ forecast }: { forecast: Forecast }) {
         <p className="text-sm font-medium text-[#657386]">Previsione 30 giorni</p>
         <p className="mt-2 text-xl font-semibold">
           {currencyFormatter.format(forecast.projectedThirtyDays)}
+        </p>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[#657386]">Previsti ora</p>
+        <p className="mt-2 text-xl font-semibold">
+          {currencyFormatter.format(forecast.plannedUpcoming)}
         </p>
       </div>
       <div>
@@ -967,6 +1061,226 @@ function SettingsModal({
           </button>
         </div>
       </form>
+    </TransactionModalShell>
+  );
+}
+
+function PlannedExpenseModal({
+  plannedExpenses,
+  onClose,
+  onSaved,
+}: {
+  plannedExpenses: PlannedExpense[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [editingExpense, setEditingExpense] = useState<PlannedExpense | null>(
+    null
+  );
+  const [recipient, setRecipient] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dayOfMonth, setDayOfMonth] = useState("15");
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  function startEdit(expense: PlannedExpense) {
+    setEditingExpense(expense);
+    setRecipient(expense.recipient);
+    setAmount(String(expense.amount));
+    setDayOfMonth(String(expense.dayOfMonth));
+    setError("");
+  }
+
+  function resetForm() {
+    setEditingExpense(null);
+    setRecipient("");
+    setAmount("");
+    setDayOfMonth("15");
+    setError("");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (!recipient.trim() || !amount || !dayOfMonth) {
+      setError("Compila destinatario, importo e giorno del mese.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(
+        editingExpense
+          ? `/api/planned-expenses/${editingExpense.id}`
+          : "/api/planned-expenses",
+        {
+          method: editingExpense ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            recipient,
+            amount,
+            dayOfMonth,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Save failed");
+      }
+
+      resetForm();
+      await onSaved();
+    } catch {
+      setError("Non sono riuscito a salvare il pagamento periodico.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete(expense: PlannedExpense) {
+    const confirmed = window.confirm(
+      `Rimuovere il pagamento periodico "${expense.recipient}"?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`/api/planned-expenses/${expense.id}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      resetForm();
+      await onSaved();
+    }
+  }
+
+  return (
+    <TransactionModalShell
+      title="Pagamenti periodici"
+      description="Aggiungi rate e spese ricorrenti da considerare nella previsione."
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="mt-5 grid gap-4">
+          <TextField
+            id="planned-recipient"
+            label="Destinatario"
+            value={recipient}
+            onChange={setRecipient}
+            placeholder="Es. finanziamento auto"
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label htmlFor="planned-amount" className="grid gap-2">
+              <span className="text-sm font-semibold text-[#657386]">
+                Importo
+              </span>
+              <input
+                id="planned-amount"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="120.00"
+                className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+              />
+            </label>
+            <label htmlFor="planned-day" className="grid gap-2">
+              <span className="text-sm font-semibold text-[#657386]">
+                Giorno del mese
+              </span>
+              <input
+                id="planned-day"
+                type="number"
+                min="1"
+                max="31"
+                step="1"
+                value={dayOfMonth}
+                onChange={(event) => setDayOfMonth(event.target.value)}
+                className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+              />
+            </label>
+          </div>
+
+          {error ? (
+            <p className="rounded-md bg-[#ffe1d6] px-3 py-2 text-sm font-semibold text-[#a13d19]">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {editingExpense ? (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold transition hover:bg-[#f3f6fb]"
+            >
+              Nuovo
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="h-11 rounded-md bg-[#0f8f8c] px-4 text-sm font-semibold text-white transition hover:bg-[#0b7471] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving
+              ? "Salvataggio..."
+              : editingExpense
+                ? "Salva modifiche"
+                : "Salva periodico"}
+          </button>
+        </div>
+      </form>
+
+      <div className="mt-6 grid gap-2 border-t border-[#dbe3ee] pt-4">
+        <h3 className="text-sm font-semibold uppercase text-[#657386]">
+          Gia previsti
+        </h3>
+        {plannedExpenses.length === 0 ? (
+          <p className="text-sm text-[#657386]">
+            Nessun pagamento periodico salvato.
+          </p>
+        ) : (
+          plannedExpenses.map((expense) => (
+            <div
+              key={expense.id}
+              className="grid gap-2 rounded-md border border-[#dbe3ee] bg-[#fbfcff] p-3 sm:grid-cols-[1fr_auto]"
+            >
+              <div>
+                <p className="font-semibold">{expense.recipient}</p>
+                <p className="mt-1 text-sm text-[#657386]">
+                  Ogni {expense.dayOfMonth} del mese -{" "}
+                  {currencyFormatter.format(expense.amount)}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => startEdit(expense)}
+                  className="rounded-md border border-[#cad4e1] px-3 py-2 text-sm font-semibold transition hover:bg-white"
+                >
+                  Modifica
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(expense)}
+                  className="rounded-md border border-[#f1b9a7] px-3 py-2 text-sm font-semibold text-[#a13d19] transition hover:bg-[#ffe1d6]"
+                >
+                  Elimina
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </TransactionModalShell>
   );
 }
