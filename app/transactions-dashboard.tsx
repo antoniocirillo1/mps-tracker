@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import type { ParsedTransaction } from "@/lib/transactions";
 
 const currencyFormatter = new Intl.NumberFormat("it-IT", {
@@ -38,6 +39,7 @@ export default function TransactionsDashboard() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -111,13 +113,23 @@ export default function TransactionsDashboard() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={loadTransactions}
-              className="h-11 w-fit rounded-md bg-[#171512] px-5 text-sm font-semibold text-white transition hover:bg-[#37322d] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
-            >
-              Aggiorna
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setIsManualModalOpen(true)}
+                className="h-11 rounded-md bg-[#8b1e1e] px-4 text-xl font-semibold leading-none text-white transition hover:bg-[#6f1717] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
+                aria-label="Aggiungi pagamento manuale"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={loadTransactions}
+                className="h-11 w-fit rounded-md bg-[#171512] px-5 text-sm font-semibold text-white transition hover:bg-[#37322d] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
+              >
+                Aggiorna
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -145,7 +157,7 @@ export default function TransactionsDashboard() {
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />
         </div>
 
-        <div className="grid gap-3 rounded-md border border-[#ded8cf] bg-[#fffdf8] p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <div className="grid gap-3 rounded-md border border-[#ded8cf] bg-[#fffdf8] p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
           <DateField
             id="date-from"
             label="Da"
@@ -160,6 +172,16 @@ export default function TransactionsDashboard() {
             onChange={setDateTo}
             min={dateFrom}
           />
+          <button
+            type="button"
+            onClick={() => {
+              setDateFrom("1980-01-01");
+              setDateTo(getTodayDateKey());
+            }}
+            className="h-11 rounded-md bg-[#171512] px-4 text-sm font-semibold text-white transition hover:bg-[#37322d] focus:outline-none focus:ring-2 focus:ring-[#8b1e1e] focus:ring-offset-2"
+          >
+            SEMPRE
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -201,6 +223,13 @@ export default function TransactionsDashboard() {
           </div>
         )}
       </section>
+
+      {isManualModalOpen ? (
+        <ManualTransactionModal
+          onClose={() => setIsManualModalOpen(false)}
+          onSaved={loadTransactions}
+        />
+      ) : null}
     </main>
   );
 }
@@ -272,6 +301,18 @@ function getLocalDayKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function getTodayDateKey() {
+  return getLocalDayKey(new Date());
+}
+
+function getCurrentTimeKey() {
+  const now = new Date();
+  const hour = String(now.getHours()).padStart(2, "0");
+  const minute = String(now.getMinutes()).padStart(2, "0");
+
+  return `${hour}:${minute}`;
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-[#ded8cf] bg-white px-4 py-4 shadow-sm">
@@ -306,6 +347,180 @@ function DateField({
         min={min}
         max={max}
         onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+      />
+    </label>
+  );
+}
+
+function ManualTransactionModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [recipient, setRecipient] = useState("");
+  const [date, setDate] = useState(getTodayDateKey());
+  const [time, setTime] = useState(getCurrentTimeKey());
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (!recipient.trim() || !date || !time || !amount) {
+      setError("Compila destinatario, data, ora e importo.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source: "manual",
+          recipient,
+          amount,
+          occurredAt: `${date}T${time}:00`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Save failed");
+      }
+
+      await onSaved();
+      onClose();
+    } catch {
+      setError("Non sono riuscito a salvare il pagamento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-black/35 px-4 py-5 sm:items-center sm:justify-center">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-md border border-[#ded8cf] bg-[#fffdf8] p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Nuovo pagamento</h2>
+            <p className="mt-1 text-sm text-[#655f57]">
+              Inserisci un movimento manuale nella lista.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 rounded-md border border-[#c7b9a8] text-lg font-semibold transition hover:bg-white"
+            aria-label="Chiudi"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          <TextField
+            id="manual-recipient"
+            label="Destinatario"
+            value={recipient}
+            onChange={setRecipient}
+            placeholder="Es. FIRMOO"
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DateField
+              id="manual-date"
+              label="Data"
+              value={date}
+              onChange={setDate}
+            />
+            <label htmlFor="manual-time" className="grid gap-2">
+              <span className="text-sm font-semibold text-[#655f57]">Ora</span>
+              <input
+                id="manual-time"
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+              />
+            </label>
+          </div>
+
+          <label htmlFor="manual-amount" className="grid gap-2">
+            <span className="text-sm font-semibold text-[#655f57]">Importo</span>
+            <input
+              id="manual-amount"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="34.77"
+              className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+            />
+          </label>
+
+          {error ? (
+            <p className="rounded-md bg-[#f7d7d7] px-3 py-2 text-sm font-semibold text-[#8b1e1e]">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 rounded-md border border-[#c7b9a8] px-4 text-sm font-semibold transition hover:bg-white"
+          >
+            Annulla
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="h-11 rounded-md bg-[#8b1e1e] px-4 text-sm font-semibold text-white transition hover:bg-[#6f1717] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSaving ? "Salvataggio..." : "Salva pagamento"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function TextField({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label htmlFor={id} className="grid gap-2">
+      <span className="text-sm font-semibold text-[#655f57]">{label}</span>
+      <input
+        id={id}
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
       />
     </label>

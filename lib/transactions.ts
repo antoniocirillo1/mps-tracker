@@ -5,34 +5,60 @@ export type ParsedTransaction = {
   recipient: string;
   occurredAt: string | null;
   createdAt: string;
+  source: "sms" | "manual";
   status: "parsed" | "unparsed";
 };
 
 type TransactionPayload = {
   rawMessage?: string;
+  amount?: number | string;
+  recipient?: string;
+  occurredAt?: string;
+  source?: "sms" | "manual";
   [key: string]: unknown;
 };
 
-declare global {
-  // Keeps local/dev data through hot reloads. This is temporary until Supabase.
-  var mpsTransactions: ParsedTransaction[] | undefined;
+type SupabaseTransaction = {
+  id: string;
+  raw_message: string | null;
+  amount: number | string | null;
+  recipient: string;
+  occurred_at: string;
+  source: "sms" | "manual";
+  created_at: string;
+};
+
+type InsertTransaction = {
+  raw_message: string | null;
+  amount: number | null;
+  recipient: string;
+  occurred_at: string;
+  source: "sms" | "manual";
+};
+
+export async function addTransaction(payload: TransactionPayload) {
+  const transaction =
+    payload.source === "manual"
+      ? parseManualTransaction(payload)
+      : parseMpsMessage(String(payload.rawMessage ?? "").trim());
+
+  const [savedTransaction] = await supabaseRequest<SupabaseTransaction[]>(
+    "/transactions?select=*",
+    {
+      method: "POST",
+      body: JSON.stringify(toInsertTransaction(transaction)),
+    }
+  );
+
+  return fromSupabaseTransaction(savedTransaction);
 }
 
-const storage = globalThis.mpsTransactions ?? [];
+export async function getTransactions() {
+  const transactions = await supabaseRequest<SupabaseTransaction[]>(
+    "/transactions?select=*&order=occurred_at.desc"
+  );
 
-globalThis.mpsTransactions = storage;
-
-export function addTransaction(payload: TransactionPayload) {
-  const rawMessage = String(payload.rawMessage ?? "").trim();
-  const transaction = parseMpsMessage(rawMessage);
-
-  storage.unshift(transaction);
-
-  return transaction;
-}
-
-export function getTransactions() {
-  return storage;
+  return transactions.map(fromSupabaseTransaction);
 }
 
 function parseMpsMessage(rawMessage: string): ParsedTransaction {
@@ -49,7 +75,29 @@ function parseMpsMessage(rawMessage: string): ParsedTransaction {
     recipient: recipient ?? "Da classificare",
     occurredAt,
     createdAt,
+    source: "sms",
     status: isParsed ? "parsed" : "unparsed",
+  };
+}
+
+function parseManualTransaction(payload: TransactionPayload): ParsedTransaction {
+  const recipient = String(payload.recipient ?? "").trim();
+  const amount = normalizeAmount(payload.amount);
+  const occurredAt = String(payload.occurredAt ?? "").trim();
+
+  if (!recipient || amount === null || !occurredAt) {
+    throw new Error("Manual transaction is incomplete");
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    rawMessage: `Inserimento manuale: ${recipient}`,
+    amount,
+    recipient,
+    occurredAt,
+    createdAt: new Date().toISOString(),
+    source: "manual",
+    status: "parsed",
   };
 }
 
@@ -60,7 +108,11 @@ function parseAmount(message: string) {
     return null;
   }
 
-  const normalizedAmount = match[1].replace(",", ".");
+  return normalizeAmount(match[1]);
+}
+
+function normalizeAmount(value: unknown) {
+  const normalizedAmount = String(value ?? "").replace(",", ".");
   const amount = Number.parseFloat(normalizedAmount);
 
   return Number.isFinite(amount) ? amount : null;
@@ -95,10 +147,6 @@ function parseOccurredAt(message: string) {
   return `${year}-${padDatePart(monthNumber)}-${padDatePart(dayNumber)}T${padDatePart(hourNumber)}:${padDatePart(minuteNumber)}:00`;
 }
 
-function padDatePart(value: number) {
-  return value.toString().padStart(2, "0");
-}
-
 function parseRecipient(message: string) {
   const details = message.match(/\(([^)]*)\)/)?.[1];
 
@@ -112,4 +160,67 @@ function parseRecipient(message: string) {
     .filter(Boolean);
 
   return parts[1] ?? null;
+}
+
+function toInsertTransaction(
+  transaction: ParsedTransaction
+): InsertTransaction {
+  return {
+    raw_message: transaction.rawMessage,
+    amount: transaction.amount,
+    recipient: transaction.recipient,
+    occurred_at: transaction.occurredAt ?? toLocalDateTime(new Date()),
+    source: transaction.source,
+  };
+}
+
+function fromSupabaseTransaction(
+  transaction: SupabaseTransaction
+): ParsedTransaction {
+  return {
+    id: transaction.id,
+    rawMessage: transaction.raw_message ?? "",
+    amount:
+      transaction.amount === null ? null : Number.parseFloat(String(transaction.amount)),
+    recipient: transaction.recipient,
+    occurredAt: transaction.occurred_at,
+    createdAt: transaction.created_at,
+    source: transaction.source,
+    status: transaction.amount === null ? "unparsed" : "parsed",
+  };
+}
+
+async function supabaseRequest<T>(path: string, init: RequestInit = {}) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error("Missing Supabase environment variables");
+  }
+
+  const response = await fetch(`${url}/rest/v1${path}`, {
+    ...init,
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...init.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase request failed: ${message}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, "0");
+}
+
+function toLocalDateTime(date: Date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:00`;
 }
