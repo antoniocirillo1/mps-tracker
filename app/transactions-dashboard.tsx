@@ -138,7 +138,7 @@ export default function TransactionsDashboard() {
               value={currencyFormatter.format(totalAmount)}
             />
             <Metric
-              label="SMS letti"
+              label="Operazioni lette"
               value={`${parsedCount}/${filteredTransactions.length}`}
             />
           </div>
@@ -554,6 +554,7 @@ function TransactionRow({
               Da verificare
             </span>
           ) : null}
+          <SourceBadge source={transaction.source} />
         </div>
         <p className="mt-2 text-sm text-[#657386]">{dateLabel}</p>
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7a8797]">
@@ -565,6 +566,17 @@ function TransactionRow({
         {amountLabel}
       </p>
     </article>
+  );
+}
+
+function SourceBadge({ source }: { source: ParsedTransaction["source"] }) {
+  const label =
+    source === "email" ? "Email" : source === "manual" ? "Manuale" : "SMS";
+
+  return (
+    <span className="rounded-sm bg-[#eaf0f7] px-2 py-1 text-xs font-semibold text-[#526175]">
+      {label}
+    </span>
   );
 }
 
