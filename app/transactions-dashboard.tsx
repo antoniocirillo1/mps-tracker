@@ -36,6 +36,8 @@ export default function TransactionsDashboard() {
   const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -67,22 +69,28 @@ export default function TransactionsDashboard() {
     };
   }, [loadTransactions]);
 
+  const filteredTransactions = useMemo(
+    () => filterTransactionsByDateRange(transactions, dateFrom, dateTo),
+    [transactions, dateFrom, dateTo]
+  );
+  const hasActiveDateFilter = dateFrom !== "" || dateTo !== "";
+
   const totalAmount = useMemo(
     () =>
-      transactions.reduce(
+      filteredTransactions.reduce(
         (total, transaction) => total + (transaction.amount ?? 0),
         0
       ),
-    [transactions]
+    [filteredTransactions]
   );
 
-  const parsedCount = transactions.filter(
+  const parsedCount = filteredTransactions.filter(
     (transaction) => transaction.status === "parsed"
   ).length;
 
   const transactionGroups = useMemo(
-    () => groupTransactionsByDay(transactions),
-    [transactions]
+    () => groupTransactionsByDay(filteredTransactions),
+    [filteredTransactions]
   );
 
   return (
@@ -113,14 +121,14 @@ export default function TransactionsDashboard() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Metric label="Transazioni" value={transactions.length} />
+            <Metric label="Transazioni" value={filteredTransactions.length} />
             <Metric
               label="Totale speso"
               value={currencyFormatter.format(totalAmount)}
             />
             <Metric
               label="SMS letti"
-              value={`${parsedCount}/${transactions.length}`}
+              value={`${parsedCount}/${filteredTransactions.length}`}
             />
           </div>
         </div>
@@ -137,8 +145,38 @@ export default function TransactionsDashboard() {
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />
         </div>
 
+        <div className="grid gap-3 rounded-md border border-[#ded8cf] bg-[#fffdf8] p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <DateField
+            id="date-from"
+            label="Da"
+            value={dateFrom}
+            onChange={setDateFrom}
+            max={dateTo}
+          />
+          <DateField
+            id="date-to"
+            label="A"
+            value={dateTo}
+            onChange={setDateTo}
+            min={dateFrom}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setDateFrom("");
+              setDateTo("");
+            }}
+            disabled={!hasActiveDateFilter}
+            className="h-11 rounded-md border border-[#c7b9a8] px-4 text-sm font-semibold text-[#171512] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            Pulisci
+          </button>
+        </div>
+
         {transactions.length === 0 ? (
           <EmptyState loadState={loadState} />
+        ) : filteredTransactions.length === 0 ? (
+          <NoResultsState />
         ) : (
           <div className="grid gap-6">
             {transactionGroups.map((group) => (
@@ -196,6 +234,32 @@ function groupTransactionsByDay(transactions: ParsedTransaction[]) {
   return Array.from(groups.values());
 }
 
+function filterTransactionsByDateRange(
+  transactions: ParsedTransaction[],
+  dateFrom: string,
+  dateTo: string
+) {
+  return transactions.filter((transaction) => {
+    const transactionDay = getTransactionDayKey(transaction);
+
+    if (dateFrom && transactionDay < dateFrom) {
+      return false;
+    }
+
+    if (dateTo && transactionDay > dateTo) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function getTransactionDayKey(transaction: ParsedTransaction) {
+  return getLocalDayKey(
+    new Date(transaction.occurredAt ?? transaction.createdAt)
+  );
+}
+
 function getTransactionTime(transaction: ParsedTransaction) {
   return new Date(transaction.occurredAt ?? transaction.createdAt).getTime();
 }
@@ -214,6 +278,37 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <p className="text-sm font-medium text-[#655f57]">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
     </div>
+  );
+}
+
+function DateField({
+  id,
+  label,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  min?: string;
+  max?: string;
+}) {
+  return (
+    <label htmlFor={id} className="grid gap-2">
+      <span className="text-sm font-semibold text-[#655f57]">{label}</span>
+      <input
+        id={id}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-md border border-[#c7b9a8] bg-white px-3 text-sm font-semibold text-[#171512] outline-none transition focus:border-[#8b1e1e] focus:ring-2 focus:ring-[#8b1e1e]/20"
+      />
+    </label>
   );
 }
 
@@ -253,6 +348,17 @@ function TransactionRow({
         {amountLabel}
       </p>
     </article>
+  );
+}
+
+function NoResultsState() {
+  return (
+    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md border border-dashed border-[#c7b9a8] bg-[#fffdf8] px-6 text-center">
+      <p className="text-lg font-semibold">Nessun pagamento in questo intervallo</p>
+      <p className="mt-3 max-w-md text-sm leading-6 text-[#655f57]">
+        Modifica le date o pulisci il filtro per tornare alla lista completa.
+      </p>
+    </div>
   );
 }
 
