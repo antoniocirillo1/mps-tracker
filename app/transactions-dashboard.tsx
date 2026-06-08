@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { PlannedExpense } from "@/lib/planned-expenses";
 import type { TrackerSettings } from "@/lib/settings";
@@ -54,6 +54,8 @@ export default function TransactionsDashboard() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [dateFrom, setDateFrom] = useState(getSalaryPeriodStartDateKey);
   const [dateTo, setDateTo] = useState(getTodayDateKey);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [isRecipientDropdownOpen, setIsRecipientDropdownOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isPlannedModalOpen, setIsPlannedModalOpen] = useState(false);
@@ -126,11 +128,30 @@ export default function TransactionsDashboard() {
     };
   }, [loadPlannedExpenses, loadSettings, loadTransactions]);
 
-  const filteredTransactions = useMemo(
-    () => filterTransactionsByDateRange(transactions, dateFrom, dateTo),
-    [transactions, dateFrom, dateTo]
-  );
-  const hasActiveDateFilter = dateFrom !== "" || dateTo !== "";
+  useEffect(() => {
+    if (!isRecipientDropdownOpen) return;
+    function handleClick() {
+      setIsRecipientDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isRecipientDropdownOpen]);
+
+  const allRecipients = useMemo(() => {
+    const names = transactions
+      .map((t) => t.recipient)
+      .filter((r): r is string => Boolean(r));
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, "it"));
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    const byDate = filterTransactionsByDateRange(transactions, dateFrom, dateTo);
+    if (selectedRecipients.length === 0) return byDate;
+    return byDate.filter((t) => selectedRecipients.includes(t.recipient));
+  }, [transactions, dateFrom, dateTo, selectedRecipients]);
+
+  const hasActiveDateFilter =
+    dateFrom !== "" || dateTo !== "" || selectedRecipients.length > 0;
 
   const totalAmount = useMemo(
     () =>
@@ -281,32 +302,53 @@ export default function TransactionsDashboard() {
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />
         </div>
 
-        <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <DateField
-            id="date-from"
-            label="Da"
-            value={dateFrom}
-            onChange={setDateFrom}
-            max={dateTo}
-          />
-          <DateField
-            id="date-to"
-            label="A"
-            value={dateTo}
-            onChange={setDateTo}
-            min={dateFrom}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
+        <div className="grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <DateField
+              id="date-from"
+              label="Da"
+              value={dateFrom}
+              onChange={setDateFrom}
+              max={dateTo}
+            />
+            <DateField
+              id="date-to"
+              label="A"
+              value={dateTo}
+              onChange={setDateTo}
+              min={dateFrom}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setSelectedRecipients([]);
+              }}
+              disabled={!hasActiveDateFilter}
+              className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c] hover:bg-[#eefafa] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Pulisci
+            </button>
+          </div>
+
+          <RecipientFilter
+            allRecipients={allRecipients}
+            selectedRecipients={selectedRecipients}
+            isOpen={isRecipientDropdownOpen}
+            onToggleOpen={(e) => {
+              e.stopPropagation();
+              setIsRecipientDropdownOpen((v) => !v);
             }}
-            disabled={!hasActiveDateFilter}
-            className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c] hover:bg-[#eefafa] disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Pulisci
-          </button>
+            onToggleRecipient={(name) => {
+              setSelectedRecipients((prev) =>
+                prev.includes(name)
+                  ? prev.filter((r) => r !== name)
+                  : [...prev, name]
+              );
+            }}
+            onClear={() => setSelectedRecipients([])}
+          />
         </div>
 
         {transactions.length === 0 ? (
@@ -645,6 +687,96 @@ function DateField({
         className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
       />
     </label>
+  );
+}
+
+function RecipientFilter({
+  allRecipients,
+  selectedRecipients,
+  isOpen,
+  onToggleOpen,
+  onToggleRecipient,
+  onClear,
+}: {
+  allRecipients: string[];
+  selectedRecipients: string[];
+  isOpen: boolean;
+  onToggleOpen: (e: React.MouseEvent) => void;
+  onToggleRecipient: (name: string) => void;
+  onClear: () => void;
+}) {
+  const hasSelection = selectedRecipients.length > 0;
+
+  return (
+    <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-[#657386]">
+          Filtra per mittente / destinatario
+        </span>
+        {hasSelection ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs font-semibold text-[#0f8f8c] hover:underline"
+          >
+            Rimuovi ({selectedRecipients.length})
+          </button>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggleOpen}
+        className="mt-2 flex h-11 w-full items-center justify-between rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c]"
+      >
+        <span className="truncate text-left">
+          {hasSelection
+            ? selectedRecipients.join(", ")
+            : "Tutti i movimenti"}
+        </span>
+        <span className="ml-2 shrink-0 text-xs text-[#657386]">
+          {isOpen ? "▲" : "▼"}
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-[#dbe3ee] bg-white shadow-lg">
+          {allRecipients.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-[#657386]">
+              Nessun destinatario disponibile.
+            </p>
+          ) : (
+            allRecipients.map((name) => {
+              const isSelected = selectedRecipients.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => onToggleRecipient(name)}
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-[#eefafa] ${
+                    isSelected
+                      ? "bg-[#dff4f3] text-[#0b7471]"
+                      : "text-[#17202f]"
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs ${
+                      isSelected
+                        ? "border-[#0f8f8c] bg-[#0f8f8c] text-white"
+                        : "border-[#cad4e1]"
+                    }`}
+                  >
+                    {isSelected ? "✓" : ""}
+                  </span>
+                  {name}
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
