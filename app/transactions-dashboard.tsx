@@ -128,15 +128,6 @@ export default function TransactionsDashboard() {
     };
   }, [loadPlannedExpenses, loadSettings, loadTransactions]);
 
-  useEffect(() => {
-    if (!isRecipientDropdownOpen) return;
-    function handleClick() {
-      setIsRecipientDropdownOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isRecipientDropdownOpen]);
-
   const allRecipients = useMemo(() => {
     const names = transactions
       .map((t) => t.recipient)
@@ -336,10 +327,8 @@ export default function TransactionsDashboard() {
             allRecipients={allRecipients}
             selectedRecipients={selectedRecipients}
             isOpen={isRecipientDropdownOpen}
-            onToggleOpen={(e) => {
-              e.stopPropagation();
-              setIsRecipientDropdownOpen((v) => !v);
-            }}
+            onToggleOpen={() => setIsRecipientDropdownOpen((v) => !v)}
+            onClose={() => setIsRecipientDropdownOpen(false)}
             onToggleRecipient={(name) => {
               setSelectedRecipients((prev) =>
                 prev.includes(name)
@@ -363,8 +352,8 @@ export default function TransactionsDashboard() {
                   <h3 className="text-sm font-semibold uppercase text-[#657386]">
                     {group.dayLabel}
                   </h3>
-                  <p className={`text-sm font-semibold tabular-nums ${group.total > 0 ? "text-[#c45a2b]" : "text-[#0b7471]"}`}>
-                  Totale giorno {group.total > 0 ? "- " : ""}{currencyFormatter.format(Math.abs(group.total))}
+                  <p className={`text-sm font-semibold tabular-nums ${group.total > 0 ? "text-[#c45a2b]" : "text-[#0b7471]"}` }>
+                    Totale giorno {group.total > 0 ? "- " : ""}{currencyFormatter.format(Math.abs(group.total))}
                   </p>
                 </div>
 
@@ -695,20 +684,37 @@ function RecipientFilter({
   selectedRecipients,
   isOpen,
   onToggleOpen,
+  onClose,
   onToggleRecipient,
   onClear,
 }: {
   allRecipients: string[];
   selectedRecipients: string[];
   isOpen: boolean;
-  onToggleOpen: (e: React.MouseEvent) => void;
+  onToggleOpen: () => void;
+  onClose: () => void;
   onToggleRecipient: (name: string) => void;
   onClear: () => void;
 }) {
   const hasSelection = selectedRecipients.length > 0;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onClose]);
 
   return (
-    <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+    <div ref={containerRef} className="relative">
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold text-[#657386]">
           Filtra per mittente / destinatario
@@ -730,9 +736,7 @@ function RecipientFilter({
         className="mt-2 flex h-11 w-full items-center justify-between rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c]"
       >
         <span className="truncate text-left">
-          {hasSelection
-            ? selectedRecipients.join(", ")
-            : "Tutti i movimenti"}
+          {hasSelection ? selectedRecipients.join(", ") : "Tutti i movimenti"}
         </span>
         <span className="ml-2 shrink-0 text-xs text-[#657386]">
           {isOpen ? "▲" : "▼"}
@@ -752,7 +756,6 @@ function RecipientFilter({
                 <button
                   key={name}
                   type="button"
-                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onToggleRecipient(name)}
                   className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-[#eefafa] ${
                     isSelected
@@ -1460,9 +1463,9 @@ function TransactionRow({
 }) {
   const isIncome = transaction.amount !== null && transaction.amount < 0;
   const amountLabel =
-  transaction.amount === null
-    ? "Importo non letto"
-    : `${isIncome ? "+" : "-"} ${currencyFormatter.format(Math.abs(transaction.amount))}`;
+    transaction.amount === null
+      ? "Importo non letto"
+      : `${isIncome ? "+" : "-"} ${currencyFormatter.format(Math.abs(transaction.amount))}`;
   const dateLabel = transaction.occurredAt
     ? dateFormatter.format(new Date(transaction.occurredAt))
     : "Data non letta";
@@ -1487,8 +1490,12 @@ function TransactionRow({
         </p>
       </div>
 
-      <p className={`text-left text-2xl font-semibold tabular-nums sm:text-right ${isIncome ? "text-[#0b7471]" : "text-[#c45a2b]"}`}>
-      {amountLabel}
+      <p
+        className={`text-left text-2xl font-semibold tabular-nums sm:text-right ${
+          isIncome ? "text-[#0b7471]" : "text-[#c45a2b]"
+        }`}
+      >
+        {amountLabel}
       </p>
 
       <div className="absolute right-3 top-3">
