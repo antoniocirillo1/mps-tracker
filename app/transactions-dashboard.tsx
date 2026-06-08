@@ -1326,10 +1326,11 @@ function TransactionRow({
   onEdit: () => void;
   onToggleMenu: () => void;
 }) {
+  const isIncome = transaction.amount !== null && transaction.amount < 0;
   const amountLabel =
-    transaction.amount === null
-      ? "Importo non letto"
-      : currencyFormatter.format(transaction.amount);
+  transaction.amount === null
+    ? "Importo non letto"
+    : `${isIncome ? "+" : "-"} ${currencyFormatter.format(Math.abs(transaction.amount))}`;
   const dateLabel = transaction.occurredAt
     ? dateFormatter.format(new Date(transaction.occurredAt))
     : "Data non letta";
@@ -1354,8 +1355,8 @@ function TransactionRow({
         </p>
       </div>
 
-      <p className="text-left text-2xl font-semibold tabular-nums text-[#c45a2b] sm:text-right">
-        {amountLabel}
+      <p className={`text-left text-2xl font-semibold tabular-nums sm:text-right ${isIncome ? "text-[#0b7471]" : "text-[#c45a2b]"}`}>
+      {amountLabel}
       </p>
 
       <div className="absolute right-3 top-3">
