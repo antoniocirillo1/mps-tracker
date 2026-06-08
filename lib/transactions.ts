@@ -243,7 +243,8 @@ function parseEmailOccurredAt(message: string, emailDate: unknown) {
   const dateMatch =
     message.match(/Bonifico istantaneo inserito il\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i) ??
     message.match(/Data di accredito\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i) ??
-    message.match(/Data operazione\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i); // ← formato accrediti
+    message.match(/Data Accredito\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i) ??
+    message.match(/Data operazione\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
 
   if (!dateMatch) {
     return null;
