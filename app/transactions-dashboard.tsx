@@ -275,7 +275,7 @@ export default function TransactionsDashboard() {
           <div>
             <h2 className="text-xl font-semibold">Lista movimenti</h2>
             <p className="mt-1 text-sm text-[#657386]">
-              Aggiornamento automatico ogni 5 secondi.
+              Aggiornamento automatico ogni ora, o manualmente con il tasto Aggiorna.
             </p>
           </div>
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />

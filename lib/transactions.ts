@@ -156,20 +156,36 @@ function parseManualTransaction(payload: TransactionPayload): ParsedTransaction 
   };
 }
 
+// Riconosce se la mail è un accredito ricevuto (entrata)
+function isReceivedEmail(subject: string): boolean {
+  return subject.toLowerCase().includes("accredito in conto");
+}
+
 function parseMpsEmail(payload: TransactionPayload): ParsedTransaction {
   const subject = String(payload.emailSubject ?? "").trim();
   const body = normalizeWhitespace(String(payload.emailBody ?? "").trim());
   const rawMessage = [subject, body].filter(Boolean).join("\n\n");
-  const amount = parseEmailAmount(body);
-  const recipient = parseEmailRecipient(body);
+  const parsedAmount = parseEmailAmount(body);
   const occurredAt = parseEmailOccurredAt(body, payload.emailDate);
-  const isParsed = amount !== null && occurredAt !== null && recipient !== null;
+  const isParsed = parsedAmount !== null && occurredAt !== null;
+
+  // Se è un accredito, l'amount è NEGATIVO (entrata → si sottrae al totale spese)
+  const amount =
+    parsedAmount !== null
+      ? isReceivedEmail(subject)
+        ? -Math.abs(parsedAmount)
+        : Math.abs(parsedAmount)
+      : null;
+
+  const recipient = isReceivedEmail(subject)
+    ? parseEmailSender(body)     // per gli accrediti prendiamo il mittente
+    : parseEmailRecipient(body); // per i bonifici prendiamo la causale
 
   return {
     id: crypto.randomUUID(),
     rawMessage,
     amount,
-    recipient: recipient ?? "Bonifico MPS",
+    recipient: recipient ?? (isReceivedEmail(subject) ? "Accredito MPS" : "Bonifico MPS"),
     occurredAt,
     createdAt: new Date().toISOString(),
     source: "email",
@@ -208,10 +224,18 @@ function parseEmailRecipient(message: string) {
   return match?.[1]?.trim() || null;
 }
 
+// Nuovo parser per il mittente negli accrediti
+function parseEmailSender(message: string) {
+  const match = message.match(/Ordinante\s+(.+?)(?:\s{2,}|$)/i);
+
+  return match?.[1]?.trim() || null;
+}
+
 function parseEmailOccurredAt(message: string, emailDate: unknown) {
   const dateMatch =
     message.match(/Bonifico istantaneo inserito il\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i) ??
-    message.match(/Data di accredito\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+    message.match(/Data di accredito\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i) ??
+    message.match(/Data operazione\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i); // ← formato accrediti
 
   if (!dateMatch) {
     return null;
@@ -239,13 +263,7 @@ function parseOccurredAt(message: string) {
   const dayNumber = Number(day);
   const hourNumber = Number(hour);
   const minuteNumber = Number(minute);
-  const occurredAt = new Date(
-    year,
-    monthNumber - 1,
-    dayNumber,
-    hourNumber,
-    minuteNumber
-  );
+  const occurredAt = new Date(year, monthNumber - 1, dayNumber, hourNumber, minuteNumber);
 
   if (Number.isNaN(occurredAt.getTime())) {
     return null;
@@ -273,9 +291,7 @@ function normalizeWhitespace(value: string) {
   return value.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ");
 }
 
-function toInsertTransaction(
-  transaction: ParsedTransaction
-): InsertTransaction {
+function toInsertTransaction(transaction: ParsedTransaction): InsertTransaction {
   return {
     raw_message: transaction.rawMessage,
     amount: transaction.amount,
@@ -285,9 +301,7 @@ function toInsertTransaction(
   };
 }
 
-function fromSupabaseTransaction(
-  transaction: SupabaseTransaction
-): ParsedTransaction {
+function fromSupabaseTransaction(transaction: SupabaseTransaction): ParsedTransaction {
   return {
     id: transaction.id,
     rawMessage: transaction.raw_message ?? "",
