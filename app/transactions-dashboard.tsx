@@ -322,7 +322,7 @@ export default function TransactionsDashboard() {
                     {group.dayLabel}
                   </h3>
                   <p className="text-sm font-semibold tabular-nums text-[#c45a2b]">
-                    Totale giorno {currencyFormatter.format(group.total)}
+                  Totale giorno {group.total < 0 ? "- " : ""}{currencyFormatter.format(Math.abs(group.total))}
                   </p>
                 </div>
 
