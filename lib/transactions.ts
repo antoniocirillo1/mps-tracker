@@ -178,7 +178,7 @@ function parseMpsEmail(payload: TransactionPayload): ParsedTransaction {
       : null;
 
   const recipient = isReceivedEmail(subject)
-    ? parseEmailSender(body)     // per gli accrediti prendiamo il mittente
+    ? formatReceivedRecipient(body)     // per gli accrediti prendiamo il mittente
     : parseEmailRecipient(body); // per i bonifici prendiamo la causale
 
   return {
@@ -223,7 +223,15 @@ function parseEmailRecipient(message: string) {
 
   return match?.[1]?.trim() || null;
 }
+function formatReceivedRecipient(message: string) {
+  const sender = parseEmailSender(message);
+  const causale = parseEmailRecipient(message); // riusa il parser della causale
 
+  if (causale && sender) return `${causale} - ${sender}`;
+  if (causale) return causale;
+  if (sender) return sender;
+  return null;
+}
 // Nuovo parser per il mittente negli accrediti
 function parseEmailSender(message: string) {
   const match = message.match(/Ordinante\s+(.+?)(?:\s{2,}|$)/i);
