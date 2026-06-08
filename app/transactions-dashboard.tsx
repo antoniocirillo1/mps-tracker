@@ -321,8 +321,8 @@ export default function TransactionsDashboard() {
                   <h3 className="text-sm font-semibold uppercase text-[#657386]">
                     {group.dayLabel}
                   </h3>
-                  <p className="text-sm font-semibold tabular-nums text-[#c45a2b]">
-                  Totale giorno {currencyFormatter.format(Math.abs(group.total))}{group.total > 0 ? " -" : ""}
+                  <p className={`text-sm font-semibold tabular-nums ${group.total > 0 ? "text-[#c45a2b]" : "text-[#0b7471]"}`}>
+                  Totale giorno {group.total > 0 ? "- " : ""}{currencyFormatter.format(Math.abs(group.total))}
                   </p>
                 </div>
 
