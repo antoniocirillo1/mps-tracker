@@ -402,7 +402,7 @@ function groupTransactionsByDay(transactions: ParsedTransaction[]) {
     const existingGroup = groups.get(dayKey);
 
     if (existingGroup) {
-      existingGroup.total += transaction.amount ?? 0;
+      existingGroup.total += Math.abs(transaction.amount ?? 0);
       existingGroup.transactions.push(transaction);
       continue;
     }
@@ -410,7 +410,7 @@ function groupTransactionsByDay(transactions: ParsedTransaction[]) {
     groups.set(dayKey, {
       dayKey,
       dayLabel: dayFormatter.format(date),
-      total: transaction.amount ?? 0,
+      total: Math.abs(transaction.amount ?? 0),
       transactions: [transaction],
     });
   }
