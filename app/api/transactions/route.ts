@@ -9,11 +9,7 @@ export async function POST(req: Request) {
 
     console.log("NEW TRANSACTION:", transaction.rawMessage);
 
-    const label = transaction.recipient
-      ? `${transaction.recipient}${
-          transaction.rawMessage ? " — " + transaction.rawMessage : ""
-        }`
-      : transaction.rawMessage ?? "Nuova transazione";
+    const label = transaction.recipient ?? "Nuova transazione";
 
     const amount = transaction.amount
       ? new Intl.NumberFormat("it-IT", {
@@ -22,7 +18,6 @@ export async function POST(req: Request) {
         }).format(Math.abs(transaction.amount))
       : "";
 
-    // await esplicito: Vercel killa le promise non-awaited prima che completino
     await sendPushNotification({
       title: "Hai appena speso altri soldi 💸",
       body: amount ? `${label}, ${amount}` : label,
