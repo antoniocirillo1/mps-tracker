@@ -19,12 +19,9 @@ interface RawSubscriptionBody {
   keys: { p256dh: string; auth: string };
 }
 
-/** Salva (o aggiorna) una subscription nel DB */
 export async function saveSubscription(sub: RawSubscriptionBody): Promise<void> {
   await supabaseRequest("/push_subscriptions", {
     method: "POST",
-    // return=representation necessario perché supabaseRequest chiama response.json()
-    // resolution=merge-duplicates per fare upsert sull'endpoint
     headers: { Prefer: "return=representation,resolution=merge-duplicates" },
     body: JSON.stringify({
       endpoint: sub.endpoint,
@@ -34,14 +31,12 @@ export async function saveSubscription(sub: RawSubscriptionBody): Promise<void> 
   });
 }
 
-/** Recupera tutte le subscriptions attive */
 export async function getSubscriptions(): Promise<PushSubscriptionRecord[]> {
   return (
     (await supabaseRequest<PushSubscriptionRecord[]>("/push_subscriptions")) ?? []
   );
 }
 
-/** Invia una notifica push a tutti i dispositivi registrati */
 export async function sendPushNotification(payload: {
   title: string;
   body: string;
@@ -49,13 +44,23 @@ export async function sendPushNotification(payload: {
   url?: string;
 }): Promise<void> {
   const subscriptions = await getSubscriptions();
+  console.log(`[push] sending to ${subscriptions.length} subscription(s)`);
 
-  await Promise.allSettled(
-    subscriptions.map((sub) =>
-      webpush.sendNotification(
+  const results = await Promise.allSettled(
+    subscriptions.map((sub) => {
+      console.log(`[push] sending to endpoint: ${sub.endpoint.slice(0, 60)}...`);
+      return webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         JSON.stringify(payload)
-      )
-    )
+      );
+    })
   );
+
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`[push] failed for subscription ${i}:`, result.reason);
+    } else {
+      console.log(`[push] success for subscription ${i}, statusCode:`, result.value.statusCode);
+    }
+  });
 }
