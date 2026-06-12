@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addTransaction, getTransactions } from "@/lib/transactions";
+import { sendPushNotification } from "@/lib/push";
 
 export async function POST(req: Request) {
   try {
@@ -8,10 +9,28 @@ export async function POST(req: Request) {
 
     console.log("NEW TRANSACTION:", transaction.rawMessage);
 
+    // Invia notifica push a tutti i dispositivi registrati
+    const label = transaction.recipient
+      ? `${transaction.recipient}${transaction.rawMessage ? " — " + transaction.rawMessage : ""}`
+      : transaction.rawMessage ?? "Nuova transazione";
+
+    const amount = transaction.amount
+      ? new Intl.NumberFormat("it-IT", {
+          style: "currency",
+          currency: "EUR",
+        }).format(Math.abs(transaction.amount))
+      : "";
+
+    sendPushNotification({
+      title: "Hai appena speso altri soldi 💸",
+      body: amount ? `${label}, ${amount}` : label,
+      transactionId: transaction.id,
+      url: "/",
+    }).catch((err) => console.error("[push] send failed:", err));
+
     return NextResponse.json({ ok: true, transaction });
   } catch (error) {
     console.error(error);
-
     return NextResponse.json(
       { ok: false, error: "Unable to save transaction" },
       { status: 400 }
@@ -24,7 +43,6 @@ export async function GET() {
     return NextResponse.json(await getTransactions());
   } catch (error) {
     console.error(error);
-
     return NextResponse.json(
       { ok: false, error: "Unable to load transactions" },
       { status: 500 }
