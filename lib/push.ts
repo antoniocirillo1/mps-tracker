@@ -14,17 +14,21 @@ export interface PushSubscriptionRecord {
   auth: string;
 }
 
-/** Salva (o aggiorna) una subscription nel DB */
-export async function saveSubscription(sub: PushSubscription): Promise<void> {
-  const json = sub.toJSON();
+// Il corpo arriva già come plain object dal JSON.stringify(subscription) del browser
+interface RawSubscriptionBody {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
 
+/** Salva (o aggiorna) una subscription nel DB */
+export async function saveSubscription(sub: RawSubscriptionBody): Promise<void> {
   await supabaseRequest("/push_subscriptions", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates" },
     body: JSON.stringify({
-      endpoint: json.endpoint,
-      p256dh: json.keys?.p256dh,
-      auth: json.keys?.auth,
+      endpoint: sub.endpoint,
+      p256dh: sub.keys?.p256dh,
+      auth: sub.keys?.auth,
     }),
   });
 }
@@ -32,8 +36,7 @@ export async function saveSubscription(sub: PushSubscription): Promise<void> {
 /** Recupera tutte le subscriptions attive */
 export async function getSubscriptions(): Promise<PushSubscriptionRecord[]> {
   return (
-    (await supabaseRequest<PushSubscriptionRecord[]>("/push_subscriptions")) ??
-    []
+    (await supabaseRequest<PushSubscriptionRecord[]>("/push_subscriptions")) ?? []
   );
 }
 
