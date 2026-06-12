@@ -9,9 +9,10 @@ export async function POST(req: Request) {
 
     console.log("NEW TRANSACTION:", transaction.rawMessage);
 
-    // Invia notifica push a tutti i dispositivi registrati
     const label = transaction.recipient
-      ? `${transaction.recipient}${transaction.rawMessage ? " — " + transaction.rawMessage : ""}`
+      ? `${transaction.recipient}${
+          transaction.rawMessage ? " — " + transaction.rawMessage : ""
+        }`
       : transaction.rawMessage ?? "Nuova transazione";
 
     const amount = transaction.amount
@@ -21,12 +22,13 @@ export async function POST(req: Request) {
         }).format(Math.abs(transaction.amount))
       : "";
 
-    sendPushNotification({
+    // await esplicito: Vercel killa le promise non-awaited prima che completino
+    await sendPushNotification({
       title: "Hai appena speso altri soldi 💸",
       body: amount ? `${label}, ${amount}` : label,
       transactionId: transaction.id,
       url: "/",
-    }).catch((err) => console.error("[push] send failed:", err));
+    });
 
     return NextResponse.json({ ok: true, transaction });
   } catch (error) {
