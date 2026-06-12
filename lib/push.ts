@@ -14,7 +14,6 @@ export interface PushSubscriptionRecord {
   auth: string;
 }
 
-// Il corpo arriva già come plain object dal JSON.stringify(subscription) del browser
 interface RawSubscriptionBody {
   endpoint: string;
   keys: { p256dh: string; auth: string };
@@ -24,7 +23,9 @@ interface RawSubscriptionBody {
 export async function saveSubscription(sub: RawSubscriptionBody): Promise<void> {
   await supabaseRequest("/push_subscriptions", {
     method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
+    // return=representation necessario perché supabaseRequest chiama response.json()
+    // resolution=merge-duplicates per fare upsert sull'endpoint
+    headers: { Prefer: "return=representation,resolution=merge-duplicates" },
     body: JSON.stringify({
       endpoint: sub.endpoint,
       p256dh: sub.keys?.p256dh,
