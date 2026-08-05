@@ -304,8 +304,14 @@ export default function TransactionsDashboard() {
             />
           </div>
 
-          <div className="border-t border-[#30373d] pt-4 text-sm text-[#aab1b7]">
-            Obiettivo risparmio: {settings ? currencyFormatter.format(settings.savingsGoal) : "In calcolo"}
+          <div className="border-t border-[#30373d] pt-4 text-sm font-semibold uppercase tracking-wide">
+            {forecast ? (
+              <span className={forecast.delta >= 0 ? "text-[#71ad9f]" : "text-[#d18458]"}>
+                {forecast.delta >= 0 ? "In linea" : "Da rallentare"}
+              </span>
+            ) : (
+              <span className="text-[#aab1b7]">In calcolo</span>
+            )}
           </div>
         </div>
       </section>
