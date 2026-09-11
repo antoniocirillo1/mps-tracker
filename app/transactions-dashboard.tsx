@@ -63,6 +63,9 @@ export default function TransactionsDashboard() {
   const [editingTransaction, setEditingTransaction] =
     useState<ParsedTransaction | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [expandedDescriptionIds, setExpandedDescriptionIds] = useState<
+    string[]
+  >([]);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -197,25 +200,25 @@ export default function TransactionsDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f3f6fb] text-[#17202f]">
-      <section className="border-b border-[#dbe3ee] bg-[#fbfcff]">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 lg:px-10">
-          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+    <main className="min-h-screen bg-[#101315] text-[#f1eee7]">
+      <section className="border-b border-[#30373d] bg-[#15191d]">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-5 py-7 sm:px-8 lg:px-10">
+          <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
             <div className="max-w-3xl">
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(true)}
-                className="rounded-md border border-[#cad4e1] bg-white px-3 py-2 text-sm font-semibold text-[#17202f] shadow-sm transition hover:border-[#0f8f8c] hover:bg-[#eefafa]"
+                className="rounded-md border border-[#465058] bg-[#1d2328] px-3 py-2 text-sm font-semibold text-[#f1eee7] transition hover:border-[#71ad9f] hover:bg-[#252c31]"
               >
                 Imposta stipendio
               </button>
-              <p className="mt-5 text-sm font-semibold uppercase text-[#0f8f8c]">
+              <p className="mt-5 text-sm font-semibold uppercase text-[#71ad9f]">
                 Tracking spese
               </p>
-              <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">
+              <h1 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
                 Ma quanto spendi?
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-[#657386]">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#aab1b7]">
                 Ecco una lista delle tue spese recenti, aggiornata in tempo reale ogni volta che arriva.
               </p>
             </div>
@@ -225,20 +228,20 @@ export default function TransactionsDashboard() {
                 <button
                   type="button"
                   onClick={() => setIsAddMenuOpen((isOpen) => !isOpen)}
-                  className="h-11 rounded-md bg-[#0f8f8c] px-4 text-xl font-semibold leading-none text-white shadow-sm transition hover:bg-[#0b7471] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
+                  className="h-11 rounded-md bg-[#71ad9f] px-4 text-xl font-semibold leading-none text-[#101315] transition hover:bg-[#8ac0b4] focus:outline-none focus:ring-2 focus:ring-[#71ad9f] focus:ring-offset-2 focus:ring-offset-[#15191d]"
                   aria-label="Aggiungi pagamento"
                 >
                   +
                 </button>
                 {isAddMenuOpen ? (
-                  <div className="absolute right-0 z-20 mt-2 grid min-w-56 overflow-hidden rounded-md border border-[#dbe3ee] bg-white text-sm font-semibold shadow-lg">
+                  <div className="absolute right-0 z-20 mt-2 grid min-w-56 overflow-hidden rounded-md border border-[#465058] bg-[#1d2328] text-sm font-semibold shadow-lg">
                     <button
                       type="button"
                       onClick={() => {
                         setIsManualModalOpen(true);
                         setIsAddMenuOpen(false);
                       }}
-                      className="px-4 py-3 text-left transition hover:bg-[#eefafa]"
+                      className="px-4 py-3 text-left transition hover:bg-[#252c31]"
                     >
                       Nuovo pagamento
                     </button>
@@ -248,7 +251,7 @@ export default function TransactionsDashboard() {
                         setIsPlannedModalOpen(true);
                         setIsAddMenuOpen(false);
                       }}
-                      className="px-4 py-3 text-left transition hover:bg-[#eefafa]"
+                      className="px-4 py-3 text-left transition hover:bg-[#252c31]"
                     >
                       Nuovo pagamento periodico
                     </button>
@@ -258,42 +261,73 @@ export default function TransactionsDashboard() {
               <button
                 type="button"
                 onClick={loadTransactions}
-                className="h-11 w-fit rounded-md bg-[#17202f] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2a3547] focus:outline-none focus:ring-2 focus:ring-[#0f8f8c] focus:ring-offset-2"
+                className="h-11 w-fit rounded-md border border-[#465058] bg-[#1d2328] px-5 text-sm font-semibold text-[#f1eee7] transition hover:bg-[#252c31] focus:outline-none focus:ring-2 focus:ring-[#71ad9f] focus:ring-offset-2 focus:ring-offset-[#15191d]"
               >
                 Aggiorna
               </button>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3">
             <Metric label="Transazioni" value={filteredTransactions.length} />
             <Metric
-              label="Totale speso"
+              label="Totale Speso"
               value={currencyFormatter.format(totalAmount)}
             />
             <Metric
-              label="Operazioni lette"
+              label="Operazioni"
               value={`${parsedCount}/${filteredTransactions.length}`}
             />
-            <ForecastMetric forecast={forecast} />
+            <Metric
+              label="Sei sopra"
+              value={
+                forecast
+                  ? currencyFormatter.format(Math.max(0, -forecast.delta))
+                  : "In calcolo"
+              }
+            />
+            <Metric
+              label="Media Giornaliera"
+              value={
+                forecast
+                  ? currencyFormatter.format(forecast.dailyAverage)
+                  : "In calcolo"
+              }
+            />
+            <Metric
+              label="Previsione 30 giorni"
+              value={
+                forecast
+                  ? currencyFormatter.format(forecast.projectedWithPlanned)
+                  : "In calcolo"
+              }
+            />
           </div>
 
-          {forecast ? <ForecastPanel forecast={forecast} /> : null}
+          <div className="border-t border-[#30373d] pt-4 text-sm font-semibold uppercase tracking-wide">
+            {forecast ? (
+              <span className={forecast.delta >= 0 ? "text-[#71ad9f]" : "text-[#d18458]"}>
+                {forecast.delta >= 0 ? "In linea" : "Da rallentare"}
+              </span>
+            ) : (
+              <span className="text-[#aab1b7]">In calcolo</span>
+            )}
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-7 sm:px-8 lg:px-10">
-        <div className="flex flex-col justify-between gap-2 border-b border-[#dbe3ee] pb-4 sm:flex-row sm:items-center">
+      <section className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-5 py-7 sm:px-8 lg:px-10">
+        <div className="flex flex-col justify-between gap-2 border-b border-[#30373d] pb-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-xl font-semibold">Lista movimenti</h2>
-            <p className="mt-1 text-sm text-[#657386]">
+            <p className="mt-1 text-sm text-[#aab1b7]">
               Aggiornamento automatico ogni ora, o manualmente con il tasto Aggiorna.
             </p>
           </div>
           <StatusBadge loadState={loadState} lastUpdatedAt={lastUpdatedAt} />
         </div>
 
-        <div className="grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm">
+        <div className="grid gap-4 rounded-md border border-[#30373d] bg-[#15191d] p-4">
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <DateField
               id="date-from"
@@ -317,7 +351,7 @@ export default function TransactionsDashboard() {
                 setSelectedRecipients([]);
               }}
               disabled={!hasActiveDateFilter}
-              className="h-11 rounded-md border border-[#cad4e1] px-4 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c] hover:bg-[#eefafa] disabled:cursor-not-allowed disabled:opacity-45"
+              className="h-11 rounded-md border border-[#465058] px-4 text-sm font-semibold text-[#f1eee7] transition hover:border-[#71ad9f] hover:bg-[#252c31] disabled:cursor-not-allowed disabled:opacity-45"
             >
               Pulisci
             </button>
@@ -348,8 +382,8 @@ export default function TransactionsDashboard() {
           <div className="grid gap-6">
             {transactionGroups.map((group) => (
               <section key={group.dayKey} className="grid gap-3">
-                <div className="sticky top-0 z-10 flex flex-col justify-between gap-2 border-y border-[#dbe3ee] bg-[#f3f6fb]/95 py-3 backdrop-blur sm:flex-row sm:items-center">
-                  <h3 className="text-sm font-semibold uppercase text-[#657386]">
+                <div className="sticky top-0 z-10 flex flex-col justify-between gap-2 border-y border-[#30373d] bg-[#101315]/95 py-3 backdrop-blur sm:flex-row sm:items-center">
+                  <h3 className="text-sm font-semibold uppercase text-[#aab1b7]">
                     {group.dayLabel}
                   </h3>
                   <p className={`text-sm font-semibold tabular-nums ${group.total > 0 ? "text-[#c45a2b]" : "text-[#0b7471]"}` }>
@@ -372,6 +406,14 @@ export default function TransactionsDashboard() {
                       setOpenActionId(null);
                     }}
                     onDelete={() => handleDeleteTransaction(transaction)}
+                    isDescriptionExpanded={expandedDescriptionIds.includes(transaction.id)}
+                    onToggleDescription={() =>
+                      setExpandedDescriptionIds((current) =>
+                        current.includes(transaction.id)
+                          ? current.filter((id) => id !== transaction.id)
+                          : [...current, transaction.id]
+                      )
+                    }
                   />
                 ))}
               </section>
@@ -595,55 +637,9 @@ function splitDateTime(value: string | null) {
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-[#dbe3ee] bg-white px-4 py-4 shadow-sm">
-      <p className="text-sm font-medium text-[#657386]">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function ForecastMetric({ forecast }: { forecast: Forecast | null }) {
-  const label = forecast && forecast.delta >= 0 ? "Sei sotto" : "Sei sopra";
-  const value = forecast
-    ? currencyFormatter.format(Math.abs(forecast.delta))
-    : "In calcolo";
-
-  return <Metric label={label} value={value} />;
-}
-
-function ForecastPanel({ forecast }: { forecast: Forecast }) {
-  const isUnderBudget = forecast.delta >= 0;
-
-  return (
-    <div className="grid gap-3 rounded-md border border-[#dbe3ee] bg-white p-4 shadow-sm sm:grid-cols-4">
-      <div>
-        <p className="text-sm font-medium text-[#657386]">Media giornaliera</p>
-        <p className="mt-2 text-xl font-semibold">
-          {currencyFormatter.format(forecast.dailyAverage)}
-        </p>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-[#657386]">Previsione 30 giorni</p>
-        <p className="mt-2 text-xl font-semibold">
-          {currencyFormatter.format(forecast.projectedThirtyDays)}
-        </p>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-[#657386]">Previsti ora</p>
-        <p className="mt-2 text-xl font-semibold">
-          {currencyFormatter.format(forecast.plannedUpcoming)}
-        </p>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-[#657386]">Obiettivo risparmio</p>
-        <p
-          className={`mt-2 text-xl font-semibold ${
-            isUnderBudget ? "text-[#0b7471]" : "text-[#c45a2b]"
-          }`}
-        >
-          {isUnderBudget ? "In linea" : "Da rallentare"}
-        </p>
-      </div>
+    <div className="min-h-28 rounded-md border border-[#30373d] bg-[#1d2328] px-4 py-4">
+      <p className="text-xs font-semibold uppercase text-[#aab1b7]">{label}</p>
+      <p className="mt-3 break-words text-xl font-semibold text-[#f1eee7] sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -665,7 +661,7 @@ function DateField({
 }) {
   return (
     <label htmlFor={id} className="grid gap-2">
-      <span className="text-sm font-semibold text-[#657386]">{label}</span>
+      <span className="text-sm font-semibold text-[#aab1b7]">{label}</span>
       <input
         id={id}
         type="date"
@@ -673,7 +669,7 @@ function DateField({
         min={min}
         max={max}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] outline-none transition focus:border-[#0f8f8c] focus:ring-2 focus:ring-[#0f8f8c]/20"
+        className="h-11 rounded-md border border-[#465058] bg-[#1d2328] px-3 text-sm font-semibold text-[#f1eee7] outline-none transition focus:border-[#71ad9f] focus:ring-2 focus:ring-[#71ad9f]/20"
       />
     </label>
   );
@@ -716,14 +712,14 @@ function RecipientFilter({
   return (
     <div ref={containerRef} className="relative">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-[#657386]">
+        <span className="text-sm font-semibold text-[#aab1b7]">
           Filtra per mittente / destinatario
         </span>
         {hasSelection ? (
           <button
             type="button"
             onClick={onClear}
-            className="text-xs font-semibold text-[#0f8f8c] hover:underline"
+            className="text-xs font-semibold text-[#71ad9f] hover:underline"
           >
             Rimuovi ({selectedRecipients.length})
           </button>
@@ -733,20 +729,20 @@ function RecipientFilter({
       <button
         type="button"
         onClick={onToggleOpen}
-        className="mt-2 flex h-11 w-full items-center justify-between rounded-md border border-[#cad4e1] bg-[#fbfcff] px-3 text-sm font-semibold text-[#17202f] transition hover:border-[#0f8f8c]"
+        className="mt-2 flex h-11 w-full items-center justify-between rounded-md border border-[#465058] bg-[#1d2328] px-3 text-sm font-semibold text-[#f1eee7] transition hover:border-[#71ad9f]"
       >
         <span className="truncate text-left">
           {hasSelection ? selectedRecipients.join(", ") : "Tutti i movimenti"}
         </span>
-        <span className="ml-2 shrink-0 text-xs text-[#657386]">
+        <span className="ml-2 shrink-0 text-xs text-[#aab1b7]">
           {isOpen ? "▲" : "▼"}
         </span>
       </button>
 
       {isOpen ? (
-        <div className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-[#dbe3ee] bg-white shadow-lg">
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border border-[#465058] bg-[#1d2328] shadow-lg">
           {allRecipients.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-[#657386]">
+            <p className="px-4 py-3 text-sm text-[#aab1b7]">
               Nessun destinatario disponibile.
             </p>
           ) : (
@@ -757,17 +753,17 @@ function RecipientFilter({
                   key={name}
                   type="button"
                   onClick={() => onToggleRecipient(name)}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-[#eefafa] ${
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-[#252c31] ${
                     isSelected
-                      ? "bg-[#dff4f3] text-[#0b7471]"
-                      : "text-[#17202f]"
+                      ? "bg-[#252c31] text-[#8ac0b4]"
+                      : "text-[#f1eee7]"
                   }`}
                 >
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs ${
                       isSelected
-                        ? "border-[#0f8f8c] bg-[#0f8f8c] text-white"
-                        : "border-[#cad4e1]"
+                        ? "border-[#71ad9f] bg-[#71ad9f] text-[#101315]"
+                        : "border-[#465058]"
                     }`}
                   >
                     {isSelected ? "✓" : ""}
@@ -1451,15 +1447,19 @@ function TextField({
 function TransactionRow({
   transaction,
   isMenuOpen,
+  isDescriptionExpanded,
   onDelete,
   onEdit,
   onToggleMenu,
+  onToggleDescription,
 }: {
   transaction: ParsedTransaction;
   isMenuOpen: boolean;
+  isDescriptionExpanded: boolean;
   onDelete: () => void;
   onEdit: () => void;
   onToggleMenu: () => void;
+  onToggleDescription: () => void;
 }) {
   const isIncome = transaction.amount !== null && transaction.amount < 0;
   const amountLabel =
@@ -1471,7 +1471,7 @@ function TransactionRow({
     : "Data non letta";
 
   return (
-    <article className="relative grid gap-4 rounded-md border border-[#dbe3ee] bg-white p-4 pr-12 shadow-sm transition hover:border-[#9fcfce] hover:shadow-md sm:grid-cols-[1fr_auto] sm:items-center">
+    <article className="relative grid gap-4 rounded-md border border-[#30373d] bg-[#15191d] p-4 pr-12 transition hover:border-[#526069] sm:grid-cols-[1fr_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="break-words text-lg font-semibold">
@@ -1484,10 +1484,23 @@ function TransactionRow({
           ) : null}
           <SourceBadge source={transaction.source} />
         </div>
-        <p className="mt-2 text-sm text-[#657386]">{dateLabel}</p>
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7a8797]">
+        <p className="mt-2 text-sm text-[#aab1b7]">{dateLabel}</p>
+        <p
+          className={`mt-3 text-sm leading-6 text-[#c3c8ca] ${
+            isDescriptionExpanded ? "" : "line-clamp-2"
+          }`}
+        >
           {transaction.rawMessage}
         </p>
+        {transaction.rawMessage.length > 120 ? (
+          <button
+            type="button"
+            onClick={onToggleDescription}
+            className="mt-1 text-sm font-semibold text-[#8ac0b4] transition hover:text-[#b8ddd5]"
+          >
+            {isDescriptionExpanded ? "meno" : "altro..."}
+          </button>
+        ) : null}
       </div>
 
       <p
@@ -1502,24 +1515,24 @@ function TransactionRow({
         <button
           type="button"
           onClick={onToggleMenu}
-          className="h-9 w-9 rounded-md text-lg font-semibold text-[#657386] transition hover:bg-[#f3f6fb]"
+          className="h-9 w-9 rounded-md text-lg font-semibold text-[#aab1b7] transition hover:bg-[#252c31]"
           aria-label="Azioni transazione"
         >
           ...
         </button>
         {isMenuOpen ? (
-          <div className="absolute right-0 z-20 mt-1 grid min-w-32 overflow-hidden rounded-md border border-[#dbe3ee] bg-white text-sm font-semibold shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 grid min-w-32 overflow-hidden rounded-md border border-[#465058] bg-[#1d2328] text-sm font-semibold shadow-lg">
             <button
               type="button"
               onClick={onEdit}
-              className="px-4 py-2 text-left transition hover:bg-[#eefafa]"
+              className="px-4 py-2 text-left transition hover:bg-[#252c31]"
             >
               Modifica
             </button>
             <button
               type="button"
               onClick={onDelete}
-              className="px-4 py-2 text-left text-[#a13d19] transition hover:bg-[#ffe1d6]"
+              className="px-4 py-2 text-left text-[#e6a48a] transition hover:bg-[#35221f]"
             >
               Elimina
             </button>
